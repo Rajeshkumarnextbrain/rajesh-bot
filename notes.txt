@@ -1,0 +1,4 @@
+# inspect the MCP server
+
+npx -y @modelcontextprotocol/inspector python mcp_server.py
+
