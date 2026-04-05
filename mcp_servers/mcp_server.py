@@ -5,6 +5,9 @@ load_dotenv()
 # Ensure the root project directory is in the path so visionfacts_api can be found
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
+from datetime import datetime
+import pytz
+
 from mcp.server.fastmcp import FastMCP
 from visionfacts_api.auth_manager import auth
 from visionfacts_api import api_functions
@@ -149,6 +152,172 @@ def get_event_types(limit: int = 20, offset: int = 0) -> dict:
     Use this to see what categories of events the system can monitor.
     """
     return api_functions.get_event_types(limit, offset)
+
+
+def convert_utc_to_ist_readable(utc_str: str) -> str:
+    """
+    Converts UTC ISO string to IST human-readable format.
+    Example: 2026-04-05T07:13:02.826Z → 05 Apr 2026, 12:43 PM
+    """
+    if not utc_str:
+        return None
+
+    try:
+        utc_time = datetime.strptime(utc_str, "%Y-%m-%dT%H:%M:%S.%fZ")
+        utc_time = utc_time.replace(tzinfo=pytz.UTC)
+
+        ist = pytz.timezone("Asia/Kolkata")
+        ist_time = utc_time.astimezone(ist)
+
+        return ist_time.strftime("%d %b %Y, %I:%M %p")
+    except Exception as e:
+        print(f"Time conversion error: {e}")
+        return utc_str
+
+@mcp.tool()
+def get_attendances_advanced(
+    limit: int = 10,
+    offset: int = 0,
+    search: str = "",
+    staff_id: str = "",
+    branch_id: int = None,
+    start_date: str = "",
+    end_date: str = "",
+    staff_type: str = ""
+) -> dict:
+    """
+    Retrieves attendance records with flexible filters.
+
+    ⚠️ IMPORTANT FOR AI AGENTS:
+
+    1. Dates MUST be in format: YYYY-MM-DD
+    - Example: "2026-04-05"
+    - Do NOT use "today", "yesterday", or natural language.
+
+    2. If you do NOT know the current date:
+    → FIRST call `get_current_time` tool and extract the date.
+
+    3. If you do NOT know the staff_id:
+    → FIRST call `get_staffs(search="name")` to find the correct staff_id.
+
+    ───────────────────────────────
+
+    You can use this tool to:
+    - Get all attendance records
+    - Search by staff name
+    - Filter by staff_id, branch, or staff_type
+    - Filter by date range
+
+    Examples:
+    - get_attendances_advanced()
+    - get_attendances_advanced(search="Ahmed")
+    - get_attendances_advanced(staff_id="232")
+    - get_attendances_advanced(start_date="2026-04-05", end_date="2026-04-05")
+
+    Args:
+        limit (int): Number of records
+        offset (int): Pagination offset
+        search (str): Search keyword
+        staff_id (str): Staff ID (use get_staffs tool if unknown)
+        branch_id (int): Branch ID
+        start_date (str): Date in YYYY-MM-DD format ONLY
+        end_date (str): Date in YYYY-MM-DD format ONLY
+        staff_type (str): Staff type (e.g., 'shell_staff')
+    """
+
+    # ✅ Normalize dates automatically
+    if start_date:
+        start_date = normalize_to_utc(start_date)
+    if end_date:
+        end_date = normalize_to_utc(end_date)
+
+    return api_functions.get_attendances_advanced(
+        limit=limit,
+        offset=offset,
+        search=search or None,
+        staff_id=staff_id or None,
+        branch_id=branch_id,
+        start_date=start_date or None,
+        end_date=end_date or None,
+        staff_type=staff_type or None
+    )
+
+@mcp.tool()
+def get_attendance_logs(attendance_record_id: int) -> dict:
+    """
+    Retrieves detailed logs for a specific attendance record.
+
+    IMPORTANT:
+    Use the 'attendance_record_id' from 'get_attendances'.
+
+    Returns:
+    - Cleaned attendance data
+    - IST formatted timestamps
+    - Safe user data
+    - Full image URLs
+    """
+    data = api_functions.get_attendance_logs(attendance_record_id)
+
+    # 🔴 Remove unwanted top-level fields
+    data.pop("event_id", None)
+    data.pop("unique_event_id", None)
+    data.pop("is_present", None)
+
+    # Convert main timestamps
+    data["check_in"] = convert_utc_to_ist_readable(data.get("check_in"))
+    data["check_out"] = convert_utc_to_ist_readable(data.get("check_out"))
+    data["created_at"] = convert_utc_to_ist_readable(data.get("created_at"))
+
+    # Process logs
+    for log in data.get("attendancelogs", []):
+        # 🔴 Remove unwanted fields
+        log.pop("device_id", None)
+        log.pop("attendance_id", None)
+        log.pop('staff_id',None)
+        log.pop('userData',None)
+        log.pop('device_name',None)
+
+        # ✅ Add full image URL
+        if log.get("image"):
+            log["image"] = f"{auth.base_url}{log['image']}"
+
+        # ✅ Keep only required user data
+        if "userData" in log:
+            log["userData"] = {
+                "first_name": log["userData"].get("first_name"),
+                "last_name": log["userData"].get("last_name"),
+            }
+
+    # 🔒 Clean top-level userData also (IMPORTANT — you missed this earlier)
+    if "userData" in data:
+        data["userData"] = {
+            "first_name": data["userData"].get("first_name"),
+            "last_name": data["userData"].get("last_name"),
+        }
+
+    return data
+
+
+@mcp.tool()
+def get_staffs(limit: int = 10, offset: int = 0, search: str = "") -> dict:
+    """
+    Retrieves staff list with optional search.
+
+    Use this tool to:
+    - Get all staff (no search)
+    - Search staff by name (e.g., "Ahmed")
+
+    Examples:
+    - get_staffs()
+    - get_staffs(search="Ahmed")
+
+    Args:
+        limit (int): Number of records
+        offset (int): Pagination offset
+        search (str, optional): Search keyword (name)
+    """
+    return api_functions.get_staffs(limit, offset, search if search else None)
+
 
 if __name__ == "__main__":
     import os
