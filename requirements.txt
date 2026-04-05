@@ -1,0 +1,13 @@
+requests
+langchain
+langchain-community
+langgraph
+python-dotenv
+langchain-openai
+mcp
+langchain-mcp-adapters
+python-dateutil
+dateparser
+fastapi
+uvicorn
+streamlit
