@@ -82,6 +82,8 @@ def stream_response(
     """
     Stream chunks from the chat API, yielding parsed JSON payloads.
     """
+    print("chat_history : ",history)
+    print()
     payload = {"query": query, "history": history, "session_id": session_id}
     with requests.post(api_url, json=payload, stream=True, timeout=120) as resp:
         resp.raise_for_status()
@@ -167,7 +169,22 @@ def main():
             role = "user" if entry["type"] == "HumanMessage" else "assistant"
             # Special handling for ToolMessages: Render images if present
             if entry["type"] == "ToolMessage":
-                content = entry["content"].strip()
+                # print(entry)
+                raw_content = entry.get("content", "")
+
+                # Normalize content to string
+                if isinstance(raw_content, list):
+                    try:
+                        # Extract text fields if it's structured like [{'type': 'text', 'text': '...'}]
+                        content = " ".join(
+                            item.get("text", "") for item in raw_content if isinstance(item, dict)
+                        )
+                    except Exception:
+                        content = str(raw_content)
+                elif isinstance(raw_content, str):
+                    content = raw_content.strip()
+                else:
+                    content = str(raw_content)
                 if content:
                     try:
                         # Attempt to parse as JSON to find image data
@@ -236,30 +253,51 @@ def main():
                     for chunk in stream_response(
                         st.session_state.api_url,
                         user_query,
-                        st.session_state.history[:-1], # Don't send the one we just added yet
+                        st.session_state.history[:-1],
                         st.session_state.session_id,
                     ):
+
                         content = chunk.get("content", "")
                         tool_calls = chunk.get("tool_calls", [])
                         tool_call_id = chunk.get("tool_call_id")
                         msg_type = chunk.get("type", "")
 
-                        # Append every message received from the agent to the history
-                        # (AI with tool_calls, ToolMessage result, and final AI response)
-                        st.session_state.history.append({
-                            "content": content,
-                            "type": msg_type,
-                            "tool_calls": tool_calls,
-                            "tool_call_id": tool_call_id
-                        })
+                        # 🔥 1. HANDLE AI TOOL CALL MESSAGE
+                        if msg_type == "AIMessage" and tool_calls:
+                            st.session_state.history.append({
+                                "content": "",  # must stay empty
+                                "type": msg_type,
+                                "tool_calls": tool_calls,
+                                "tool_call_id": None
+                            })
 
-                        if tool_calls:
                             for tc in tool_calls:
                                 status_placeholder.write(f"Calling: `{tc.get('name')}`")
 
-                        if content and msg_type == "AIMessage":
-                            final_content = content
-                            response_placeholder.markdown(final_content)
+                            continue
+
+                        # 🔥 2. HANDLE EACH TOOL RESPONSE (VERY IMPORTANT)
+                        if msg_type == "ToolMessage":
+                            st.session_state.history.append({
+                                "content": "[Tool executed successfully]",  # safe
+                                "type": msg_type,
+                                "tool_calls": [],
+                                "tool_call_id": tool_call_id  # 👈 MUST match each tool_call
+                            })
+                            continue
+
+                        # 🔥 3. HANDLE FINAL AI RESPONSE
+                        if msg_type == "AIMessage":
+                            st.session_state.history.append({
+                                "content": content,
+                                "type": msg_type,
+                                "tool_calls": [],
+                                "tool_call_id": None
+                            })
+
+                            if content:
+                                final_content = content
+                                response_placeholder.markdown(final_content)
                     
                     status_placeholder.update(label="✅ Analysis Complete", state="complete", expanded=False)
                     

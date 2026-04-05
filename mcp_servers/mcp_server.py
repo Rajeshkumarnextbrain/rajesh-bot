@@ -106,22 +106,41 @@ def get_vehicle_line_crossing_counts(range_type: str = "today") -> dict:
     """
     return api_functions.get_vehicle_line_crossing_counts(range_type)
 
+# @mcp.tool()
+# def generate_heatmap(start_date: str, end_date: str) -> dict:
+#     """
+#     Generates a heatmap image (base64) for a specific date-time range.
+    
+#     IMPORTANT: If you are unsure of the current date, ALWAYS call 'get_current_time' first.
+#     You can use natural language like 'today 9am' or ISO strings.
+#     Times are assumed to be in IST (+5:30) unless specified otherwise.
+#     """,
+#     # Normalize inputs to UTC ISO strings before calling the API
+#     print(start_date,end_date)
+#     utc_start = normalize_to_utc(start_date)
+#     utc_end = normalize_to_utc(end_date)
+    
+#     print(f"Generating heatmap: {start_date} -> {utc_start} to {end_date} -> {utc_end}")
+#     return api_functions.generate_heatmap(utc_start, utc_end)
+
 @mcp.tool()
-def generate_heatmap(start_date: str, end_date: str) -> dict:
+def get_current_time() -> dict:
     """
-    Generates a heatmap image (base64) for a specific date-time range.
-    
-    You can use natural language like 'today 9am' or ISO strings.
-    Times are assumed to be in IST (+5:30) unless specified otherwise,
-    and will be automatically converted to UTC for the API.
+    Returns the current local (Asia/Kolkata) and UTC date and time.
+    Call this tool whenever you need to resolve 'today', 'yesterday', or 'this hour'.
     """
-    # Normalize inputs to UTC ISO strings before calling the API
-    print(start_date,end_date)
-    utc_start = normalize_to_utc(start_date)
-    utc_end = normalize_to_utc(end_date)
+    from datetime import datetime
+    import pytz
     
-    print(f"Generating heatmap: {start_date} -> {utc_start} to {end_date} -> {utc_end}")
-    return api_functions.generate_heatmap(utc_start, utc_end)
+    ist = pytz.timezone('Asia/Kolkata')
+    now_ist = datetime.now(ist)
+    now_utc = datetime.now(pytz.UTC)
+    
+    return {
+        "local_time": now_ist.strftime('%Y-%m-%d %H:%M:%S %Z%z'),
+        "utc_time": now_utc.strftime('%Y-%m-%dT%H:%M:%SZ'),
+        "timezone": "Asia/Kolkata"
+    }
 
 @mcp.tool()
 def get_event_types(limit: int = 20, offset: int = 0) -> dict:
