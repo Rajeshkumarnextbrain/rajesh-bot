@@ -11,3 +11,4 @@ dateparser
 fastapi
 uvicorn
 streamlit
+deepagents

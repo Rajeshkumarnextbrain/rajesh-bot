@@ -6,7 +6,7 @@ marimo/_static/
 marimo/_lsp/
 __marimo__/
 dmypy.json
-
+.codex
 # --- Local Python .gitignore entries ---
 # Byte-compiled / optimized / DLL files
 __pycache__/

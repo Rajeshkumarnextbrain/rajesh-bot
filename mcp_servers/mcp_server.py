@@ -225,11 +225,8 @@ def get_attendances_advanced(
         staff_type (str): Staff type (e.g., 'shell_staff')
     """
 
-    # ✅ Normalize dates automatically
-    if start_date:
-        start_date = normalize_to_utc(start_date)
-    if end_date:
-        end_date = normalize_to_utc(end_date)
+    # ✅ Do not normalize dates; the API expects raw YYYY-MM-DD strings.
+    # The agent provides them properly as instructed.
 
     return api_functions.get_attendances_advanced(
         limit=limit,

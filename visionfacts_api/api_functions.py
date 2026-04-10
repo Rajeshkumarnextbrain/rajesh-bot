@@ -1,6 +1,10 @@
 import json
 import requests
+import os
+from dotenv import load_dotenv
 from visionfacts_api.auth_manager import auth
+
+load_dotenv()
 
 def get_event_counts(range_type: str = "today") -> dict:
     """
@@ -144,7 +148,7 @@ def generate_heatmap(start_date: str, end_date: str) -> dict:
         dict: JSON response containing the base64 image data.
     """
     print("Input to the generate heatmap api",start_date,end_date)
-    heatmap_service_url = "http://10.254.10.251:7000/generate_heatmap"
+    heatmap_service_url = os.getenv("HEATMAP_SERVICE_URL", "http://10.254.10.251:7000/generate_heatmap")
     
     import urllib.parse
     # Ensure ISO format (replace spaces with T) and safely encode each parameter
@@ -206,6 +210,28 @@ def get_event_types(limit: int = 20, offset: int = 0) -> dict:
         
     response.raise_for_status()
     return response.json()
+
+def convert_utc_to_ist_readable(utc_str: str) -> str:
+    """
+    Converts UTC ISO string to IST human-readable format.
+    Example: 2026-04-05T07:13:02.826Z → 05 Apr 2026, 12:43 PM
+    """
+    import pytz
+    from datetime import datetime
+    if not utc_str:
+        return None
+
+    try:
+        utc_time = datetime.strptime(utc_str, "%Y-%m-%dT%H:%M:%S.%fZ")
+        utc_time = utc_time.replace(tzinfo=pytz.UTC)
+
+        ist = pytz.timezone("Asia/Kolkata")
+        ist_time = utc_time.astimezone(ist)
+
+        return ist_time.strftime("%d %b %Y, %I:%M %p")
+    except Exception as e:
+        print(f"Time conversion error: {e}")
+        return utc_str
 
 def get_attendances_advanced(
     limit: int = 10,

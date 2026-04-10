@@ -58,12 +58,13 @@ class EventSummaryAgent:
     and provides a high-level interface for querying event and vehicle traffic logs.
     """
 
-    def __init__(self, model="gpt-5.4-nano-2026-03-17", temperature=0.5):
-        self.model_name = model
+    def __init__(self, primary_model=None, secondary_model=None, temperature=0.5):
+        self.primary_model_name = primary_model or os.getenv("PRIMARY_MODEL", "gpt-5.4-nano-2026-03-17")
+        self.secondary_model_name = secondary_model or os.getenv("SECONDARY_MODEL", "gpt-5.1-2025-11-13")
         self.temperature = temperature
-        self.mcp_url = os.getenv("MCP_SERVER_URL", "http://localhost:8000/sse")
-        self.default_model = ChatOpenAI(model=self.model_name, temperature=self.temperature)
-        self.high_capacity_model = ChatOpenAI(model="gpt-5.1-2025-11-13", temperature=self.temperature)
+        self.mcp_url = os.getenv("MCP_SERVER_URL", "http://localhost:6000/sse")
+        self.default_model = ChatOpenAI(model=self.primary_model_name, temperature=self.temperature)
+        self.high_capacity_model = ChatOpenAI(model=self.secondary_model_name, temperature=self.temperature)
         self.llm = self.default_model
         self.agent = None
         self.tools = None

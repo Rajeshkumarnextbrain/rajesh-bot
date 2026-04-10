@@ -1,4 +1,8 @@
 import requests
+import os
+from dotenv import load_dotenv
+
+load_dotenv()
 
 class AuthManager:
     """
@@ -8,9 +12,9 @@ class AuthManager:
     def __init__(self):
         self.access_token = None
         self.refresh_token = None
-        self.base_url = "http://10.254.10.250:5000"
-        self.email = None
-        self.password = None
+        self.base_url = os.getenv("AUTH_BASE_URL", "http://10.254.10.250:5000")
+        self.email = os.getenv("VISIONFACTS_EMAIL", None)
+        self.password = os.getenv("VISIONFACTS_PASSWORD", None)
 
     def login(self, email, password):
         """

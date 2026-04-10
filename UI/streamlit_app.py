@@ -4,9 +4,13 @@ from typing import Generator, Dict, Any
 
 import requests
 import streamlit as st
+import os
+from dotenv import load_dotenv
+
+load_dotenv()
 
 # Configuration
-DEFAULT_API_URL = "http://127.0.0.1:7000/api/chat"
+DEFAULT_API_URL = os.getenv("DEFAULT_API_URL", "http://127.0.0.1:7000/api/chat")
 THEME_COLOR = "#3B82F6" # Modern Blue
 
 def inject_custom_css():
