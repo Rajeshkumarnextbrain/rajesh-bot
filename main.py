@@ -116,49 +116,87 @@ TOOL_MESSAGES = {
 
 }
 
+chat_history = []
 
 async def main():
-    query = "what is today summary?"
-    # response = await agent.ainvoke({"messages": [{"role": "user", "content": query}]})
-    # print(response)
-    messages = {
-        "messages": [HumanMessage(content=query)]
-    }
-    seen_tasks = set()
-    seen_tools = set()
-    final_printed = False
-    async for chunk in agent.astream(messages,stream_mode="updates",subgraphs=True,version='v2'):
-        data = chunk.get('data',{})
-        for key,value in data.items():
-            if 'before_agent' in key:
-                print("Thinking .....")
-            elif 'after_agent' in key:
-                print("Refining .....")
-            # 🧭 Detect subagent delegation
-            elif 'model' == key: 
-                messages = value.get('messages',[])[0]
-                if messages.tool_calls:
-                    for tool in messages.tool_calls:
-                        # 📝 TASK (fixed)
-                        if tool["name"] == "task":
-                            description = tool['args'].get('description')
-                            if description not in seen_tasks:
-                                seen_tasks.add(description)
-                                print(f"\n📝 Task: {description}")
-                        # 🔧 TOOL
-                        else:
-                            tool_key = (tool["name"], str(tool["args"]))
-                            if tool_key not in seen_tools:
-                                seen_tools.add(tool_key)
-                                # print(f"\n🔧 Tool Call → {tool['name']}")
-                                print(TOOL_MESSAGES.get(tool['name'],"🔄 Processing additional data..."))
+    while True:
+        query = input("\n👤 You: ")
+        if query.lower() in ["exit", "quit"]:
+            break
+        # ✅ Reset per turn
+        seen_tasks = set()
+        seen_tools = set()
+        final_printed = False
+        # ✅ Add user message
+        chat_history.append(HumanMessage(content=query))
+        messages = {
+            "messages": chat_history
+        }
+        final_response = ""
+        async for chunk in agent.astream(
+            messages,
+            stream_mode="updates",
+            subgraphs=True,
+            version="v2"
+        ):
+            data = chunk.get("data", {})
+            for key, value in data.items():
+                if 'before_agent' in key:
+                    print("🤖 Thinking...")
+                elif 'model' == key:
+                    msg = value.get('messages', [])[0]
+                    # -----------------------------
+                    # 📝 TASK + 🔧 TOOL HANDLING
+                    # -----------------------------
+                    if msg.tool_calls:
+                        for tool in msg.tool_calls:
+                            # 📝 TASK (subagent delegation)
+                            if tool["name"] == "task":
+                                description = tool['args'].get('description')
+                                if description not in seen_tasks:
+                                    seen_tasks.add(description)
+                                    print(f"\n🧠 Understanding task:")
+                                    print(f"   → {description}")
+                            # 🔧 TOOL (user-friendly)
+                            else:
+                                tool_name = tool["name"]
+                                if tool_name not in seen_tools:
+                                    seen_tools.add(tool_name)
+                                    print(
+                                        TOOL_MESSAGES.get(
+                                            tool_name,
+                                            "🔄 Processing..."
+                                        )
+                                    )
+                    # -----------------------------
+                    # 🧠 FINAL ANSWER
+                    # -----------------------------
+                    elif not final_printed:
+                        content = msg.content
+                        # Case 1: string
+                        if isinstance(content, str) and content.strip():
+                            final_response = content
+                            final_printed = True
+                        # Case 2: list
+                        elif isinstance(content, list):
+                            text_parts = [
+                                item.get("text", "")
+                                for item in content
+                                if isinstance(item, dict)
+                                and item.get("type") == "text"
+                            ]
+                            final_response = "".join(text_parts).strip()
+                            if final_response:
+                                final_printed = True
 
-                # 🔥 3. FINAL ANSWER 
-                elif isinstance(messages.content, str) and messages.content.strip() and not final_printed:
-                     final_printed = True 
-                     print("\n🧠 Final Answer:\n") 
-                     print(messages.content)
-        
+        # ✅ Print final answer
+        if final_response:
+            print("===="*10)
+            print("\n🤖 Assistant:\n")
+            print(final_response)
+            # ✅ Save AI response
+            chat_history.append(AIMessage(content=final_response))
 
-if "__main__" == __name__:
+
+if __name__ == "__main__":
     asyncio.run(main())
