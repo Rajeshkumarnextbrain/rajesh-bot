@@ -1,21 +1,21 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { 
-  Send, 
-  Bot, 
-  User, 
-  History, 
-  Settings, 
-  Trash2, 
-  Loader2, 
-  Cpu, 
-  Activity, 
+import {
+  Send,
+  Bot,
+  User,
+  Settings,
+  Trash2,
+  Loader2,
+  Cpu,
+  Activity,
   Info,
   ChevronRight,
   Maximize2,
   RefreshCw,
-  ExternalLink,
-  X
+  X,
+  Sun,
+  Moon,
 } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
@@ -39,19 +39,144 @@ interface UpdateChunk {
 }
 
 const SUGGESTIONS = [
-  "Who is currently present?",
-  "Show me security events from today",
-  "Any crowd density alerts?",
-  "Summarize vehicle counts for this morning"
+  'Who is currently present?',
+  'Show me security events from today',
+  'Any crowd density alerts?',
+  'Summarize vehicle counts for this morning',
 ];
 
+/* ── Closes modal on Escape key ── */
+const ModalKeyHandler: React.FC<{ onClose: () => void; children: React.ReactNode }> = ({ onClose, children }) => {
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
+    window.addEventListener('keydown', handler);
+    return () => window.removeEventListener('keydown', handler);
+  }, [onClose]);
+  return <>{children}</>;
+};
+
+/* ─────────────────────────────────────────────────────────
+   CCTVImage — displays CCTV stills with loading / error states
+   Uses native <img> so CORS is never an issue.
+───────────────────────────────────────────────────────── */
+const CCTVImage: React.FC<{ src: string; onOpen: (s: string) => void }> = ({ src, onOpen }) => {
+  const [loaded,  setLoaded]  = useState(false);
+  const [errored, setErrored] = useState(false);
+
+  useEffect(() => {
+    console.log(`[CCTVImage] Mounting for src: ${src}`);
+    setLoaded(false);
+    setErrored(false);
+  }, [src]);
+
+  if (errored) {
+    return (
+      <div className="cctv-img-error">
+        <button className="cctv-view-btn" onClick={() => onOpen(src)}>
+          🖼 View Image
+        </button>
+        <span className="cctv-img-caption">Preview unavailable (Error loading URL)</span>
+      </div>
+    );
+  }
+
+  return (
+    <div
+      className="cctv-img-wrapper"
+      onClick={() => {
+        console.log(`[CCTVImage] Wrapper clicked for: ${src}`);
+        onOpen(src);
+      }}
+      title="Click to view full size"
+    >
+      {/* Spinner shown until the browser fires onLoad */}
+      {!loaded && (
+        <div className="cctv-img-loading">
+          <Loader2 size={15} className="animate-spin" />
+          <span>Loading image…</span>
+        </div>
+      )}
+
+      {/* Native img — never CORS-blocked */}
+      <img
+        key={src}
+        src={src}
+        alt="CCTV Capture"
+        loading="lazy"
+        style={{ display: loaded ? 'block' : 'none' }}
+        onLoad={() => {
+          console.log(`[CCTVImage] Successfully loaded: ${src}`);
+          setLoaded(true);
+        }}
+        onError={(e) => {
+          console.error(`[CCTVImage] Failed to load: ${src}`, e);
+          setErrored(true);
+        }}
+      />
+
+      {/* Hover overlay (only visible after load) */}
+      {loaded && (
+        <div className="cctv-img-overlay">
+          <span>🔍 View Full Size</span>
+        </div>
+      )}
+    </div>
+  );
+};
+
+/* ── Detect image URLs (extension OR /Images/ path) ── */
+function isImageUrl(href?: string): boolean {
+  if (!href) return false;
+  return (
+    /\.(webp|jpg|jpeg|gif|png)(\?.*)?$/i.test(href) ||
+    /\/(images?|screenshots?|captures?|snapshots?)\//i.test(href)
+  );
+}
+
+/* ── Markdown component map ── */
+function makeMarkdownComponents(onImageClick: (src: string) => void) {
+  const ImagePreview = ({ src, alt }: { src: string; alt?: string }) => (
+    <div style={{ marginTop: '0.6rem', marginBottom: '0.25rem' }}>
+      <CCTVImage src={src} onOpen={onImageClick} />
+      <div className="cctv-img-footer">
+        <p className="cctv-img-caption">Click image to open preview</p>
+        <a 
+          href={src} 
+          target="_blank" 
+          rel="noreferrer" 
+          className="cctv-direct-link"
+          onClick={(e) => e.stopPropagation()}
+        >
+          ↗ Direct Link
+        </a>
+      </div>
+    </div>
+  );
+
+  return {
+    a: ({ node, ...props }: any) => {
+      if (isImageUrl(props.href)) {
+        return <ImagePreview src={props.href} alt={props.children} />;
+      }
+      return <a {...props} target="_blank" rel="noreferrer" />;
+    },
+    img: ({ node, ...props }: any) => {
+      return <ImagePreview src={props.src} alt={props.alt} />;
+    }
+  };
+}
+
 function App() {
+  /* ── State ── */
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState('');
   const [isTyping, setIsTyping] = useState(false);
   const [isAnimatingText, setIsAnimatingText] = useState(false);
   const [activeProgress, setActiveProgress] = useState<{ type: string; content: string } | null>(null);
   const [typingText, setTypingText] = useState('');
+  const [previewImage, setPreviewImage] = useState<string | null>(null);
+  const [darkMode, setDarkMode] = useState(true); // default to dark
+
   const [sessionId, setSessionId] = useState<string>(() => {
     const saved = localStorage.getItem('vf_session_id');
     if (saved) return saved;
@@ -63,10 +188,22 @@ function App() {
   const chatEndRef = useRef<HTMLDivElement>(null);
   const chatContainerRef = useRef<HTMLDivElement>(null);
   const [userHasScrolledUp, setUserHasScrolledUp] = useState(false);
-  const [previewImage, setPreviewImage] = useState<string | null>(null);
-  const apiHost = 'http://localhost:9000'; // Target Manager API
+  const apiHost = 'http://localhost:9000';
 
-  // Auto-scroll logic: Only scroll if user is already at bottom or just starting
+  /* ── Persist theme preference ── */
+  useEffect(() => {
+    const saved = localStorage.getItem('vf_dark_mode');
+    if (saved !== null) setDarkMode(saved === 'true');
+  }, []);
+
+  const toggleDarkMode = () => {
+    setDarkMode((prev) => {
+      localStorage.setItem('vf_dark_mode', String(!prev));
+      return !prev;
+    });
+  };
+
+  /* ── Auto-scroll ── */
   useEffect(() => {
     if (!userHasScrolledUp) {
       chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -76,10 +213,10 @@ function App() {
   const handleScroll = () => {
     if (!chatContainerRef.current) return;
     const { scrollTop, scrollHeight, clientHeight } = chatContainerRef.current;
-    const isAtBottom = scrollHeight - scrollTop - clientHeight < 100;
-    setUserHasScrolledUp(!isAtBottom);
+    setUserHasScrolledUp(scrollHeight - scrollTop - clientHeight > 100);
   };
 
+  /* ── Session management ── */
   const clearHistory = () => {
     setMessages([]);
     setActiveProgress(null);
@@ -88,19 +225,19 @@ function App() {
     localStorage.setItem('vf_session_id', newId);
   };
 
+  /* ── Submit / streaming ── */
   const handleSubmit = async (e?: React.FormEvent, customQuery?: string) => {
     e?.preventDefault();
     const query = customQuery || input;
     if (!query.trim() || isTyping) return;
 
-    // Add user message
     const userMsg: Message = {
       id: Date.now().toString(),
       type: 'user',
       content: query,
-      timestamp: new Date()
+      timestamp: new Date(),
     };
-    setMessages(prev => [...prev, userMsg]);
+    setMessages((prev) => [...prev, userMsg]);
     setInput('');
     setIsTyping(true);
     setActiveProgress({ type: 'status', content: '🤖 Initializing...' });
@@ -109,18 +246,14 @@ function App() {
       const response = await fetch(`${apiHost}/chat`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ query, session_id: sessionId })
+        body: JSON.stringify({ query, session_id: sessionId }),
       });
 
       if (!response.body) throw new Error('No response body');
-      
+
       const reader = response.body.getReader();
       const decoder = new TextDecoder();
       let assistantMsgContent = '';
-      
-      // Create early assistant message placeholder if we want to stream text
-      // but the current server yields the full answer at once at the end.
-      // However, we handle tools/status chunks here.
 
       while (true) {
         const { value, done } = await reader.read();
@@ -133,7 +266,7 @@ function App() {
           if (!line.trim()) continue;
           try {
             const data: UpdateChunk = JSON.parse(line);
-            
+
             if (data.type === 'status') {
               setActiveProgress({ type: 'status', content: data.content });
             } else if (data.type === 'task') {
@@ -143,8 +276,7 @@ function App() {
             } else if (data.type === 'answer') {
               assistantMsgContent = data.content;
               setIsAnimatingText(true);
-              
-              // Simulate typewriter effect
+
               let currentIdx = 0;
               const text = data.content;
               const interval = setInterval(() => {
@@ -157,15 +289,15 @@ function App() {
                     id: (Date.now() + 1).toString(),
                     type: 'assistant',
                     content: text,
-                    timestamp: new Date()
+                    timestamp: new Date(),
                   };
-                  setMessages(prev => [...prev, assistantMsg]);
+                  setMessages((prev) => [...prev, assistantMsg]);
                   setTypingText('');
                   setIsAnimatingText(false);
                   setActiveProgress(null);
                   setIsTyping(false);
                 }
-              }, 15); // Adjust speed here (ms per char)
+              }, 15);
             }
           } catch (err) {
             console.error('Error parsing SSE chunk:', err, line);
@@ -177,62 +309,62 @@ function App() {
       const errorMsg: Message = {
         id: 'error-' + Date.now(),
         type: 'assistant',
-        content: "❌ Sorry, I encountered an error connecting to the VisionFacts API. Please ensure the server is running on port 9000.",
-        timestamp: new Date()
+        content:
+          '❌ Sorry, I encountered an error connecting to the VisionFacts API. Please ensure the server is running on port 9000.',
+        timestamp: new Date(),
       };
-      setMessages(prev => [...prev, errorMsg]);
+      setMessages((prev) => [...prev, errorMsg]);
       setIsTyping(false);
     } finally {
-      // We don't set setIsTyping(false) here because the typewriter effect is still running
-      // it will be set to false inside the interval completion.
       setActiveProgress(null);
     }
   };
 
+  const mdComponents = useMemo(() => makeMarkdownComponents((src) => setPreviewImage(src)), []);
+
+  /* ── Render ── */
   return (
-    <div className="flex h-screen w-full bg-slate-950 overflow-hidden">
-      {/* Sidebar */}
-      <aside className="w-80 glass flex flex-col border-r border-slate-800">
-        <div className="p-8 flex items-center gap-3">
-          <div className="w-10 h-10 rounded-xl bg-blue-600 flex items-center justify-center shadow-lg shadow-blue-500/20">
-            <Activity className="text-white" size={20} />
+    <div className={`app-root${darkMode ? ' dark' : ''}`}>
+
+      {/* ═══ SIDEBAR ═══ */}
+      <aside className="app-sidebar">
+
+        {/* Brand */}
+        <div className="app-sidebar-brand">
+          <div className="brand-icon">
+            <Activity size={17} />
           </div>
           <div>
-            <h1 className="text-xl font-bold font-outfit bg-gradient-to-r from-white to-slate-400 bg-clip-text text-transparent">
-              VisionFacts
-            </h1>
-            <p className="text-[10px] text-blue-400 tracking-widest uppercase font-bold">Analytical Assistant</p>
+            <div className="brand-name">VisionFacts</div>
+            <div className="brand-sub">Analytical Assistant</div>
           </div>
         </div>
 
-        <div className="p-4 flex flex-col gap-4">
-           <button 
-            onClick={clearHistory} 
-            className="w-full flex items-center justify-center gap-2 py-3 rounded-xl bg-blue-600 text-white hover:bg-blue-700 shadow-lg shadow-blue-500/20 transition-all font-semibold"
-          >
-            <RefreshCw size={16} />
+        {/* New Chat */}
+        <div className="sidebar-actions">
+          <button onClick={clearHistory} className="btn-new-chat">
+            <RefreshCw size={13} />
             New Chat
           </button>
         </div>
 
-        <nav className="flex-1 px-4 py-2 space-y-6">
+        {/* Nav */}
+        <nav className="sidebar-nav">
           <section>
-            <h3 className="px-4 text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-2">Current Session</h3>
-            <div className="px-4 py-3 rounded-lg bg-slate-900/50 border border-slate-800 flex items-center justify-between">
-              <span className="text-xs font-mono text-slate-400">{sessionId}</span>
-            </div>
+            <div className="sidebar-section-title">Current Session</div>
+            <div className="session-badge">{sessionId}</div>
           </section>
 
           <section>
-            <h3 className="px-4 text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-4">Quick Analysis</h3>
-            <div className="space-y-2">
+            <div className="sidebar-section-title">Quick Analysis</div>
+            <div className="suggestion-list">
               {SUGGESTIONS.map((s, idx) => (
-                <button 
+                <button
                   key={idx}
                   onClick={() => handleSubmit(undefined, s)}
-                  className="w-full text-left px-4 py-3 rounded-xl text-xs text-slate-400 hover:text-white hover:bg-white/5 border border-transparent hover:border-slate-800 transition-all flex items-center group"
+                  className="btn-suggestion"
                 >
-                  <ChevronRight size={14} className="mr-2 opacity-0 group-hover:opacity-100 transition-opacity text-blue-500" />
+                  <ChevronRight size={11} className="chevron-icon" />
                   {s}
                 </button>
               ))}
@@ -240,280 +372,264 @@ function App() {
           </section>
         </nav>
 
-        <div className="p-6 border-t border-slate-800">
-          <button onClick={clearHistory} className="w-full flex items-center justify-center gap-2 py-3 rounded-xl bg-slate-900 text-slate-400 hover:bg-red-500/10 hover:text-red-400 border border-slate-800 transition-all text-xs font-medium">
-            <Trash2 size={14} />
+        {/* Footer */}
+        <div className="sidebar-footer">
+          <button onClick={clearHistory} className="btn-clear">
+            <Trash2 size={12} />
             Clear Current Chat
           </button>
         </div>
       </aside>
 
-      {/* Main Chat Area */}
-      <main className="flex-1 flex flex-col relative overflow-hidden bg-slate-950">
+      {/* ═══ MAIN CHAT AREA ═══ */}
+      <main className="app-main">
+
         {/* Header */}
-        <header className="h-20 shrink-0 flex items-center justify-between px-8 border-b border-slate-900 bg-slate-950 z-20">
-          <div className="flex items-center gap-3">
-            <div className="flex -space-x-2">
-              <div className="w-8 h-8 rounded-full border-2 border-slate-950 bg-blue-600 flex items-center justify-center">
-                <Bot size={16} />
-              </div>
+        <header className="app-header">
+          <div className="header-agent-info">
+            <div className="agent-avatar">
+              <Bot size={15} />
             </div>
             <div>
-              <h2 className="text-sm font-semibold">CCTV Manager Agent</h2>
-              <p className="text-[10px] text-emerald-500 flex items-center gap-1 font-bold">
-                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
-                SYSTEM ONLINE
-              </p>
+              <div className="agent-name">CCTV Manager Agent</div>
+              <div className="agent-status">
+                <span className="status-dot" />
+                System Online
+              </div>
             </div>
           </div>
-          <div className="flex items-center gap-4 text-slate-500">
-             <Settings size={18} className="cursor-pointer hover:text-white transition-colors" />
-             <Maximize2 size={17} className="cursor-pointer hover:text-white transition-colors" />
+
+          <div className="header-actions">
+            {/* Theme Toggle */}
+            <button
+              className="icon-btn theme-toggle"
+              onClick={toggleDarkMode}
+              title={darkMode ? 'Switch to Light Mode' : 'Switch to Dark Mode'}
+            >
+              {darkMode ? <Sun size={15} /> : <Moon size={15} />}
+            </button>
+            <button className="icon-btn" title="Settings">
+              <Settings size={15} />
+            </button>
+            <button className="icon-btn" title="Expand">
+              <Maximize2 size={14} />
+            </button>
           </div>
         </header>
 
-        {/* Messages */}
-        <div 
+        {/* ── Messages ── */}
+        <div
           ref={chatContainerRef}
           onScroll={handleScroll}
-          className="flex-1 overflow-y-auto p-8 space-y-8 custom-scrollbar scroll-smooth"
+          className="chat-area"
         >
           <AnimatePresence initial={false}>
+
+            {/* Empty state */}
             {messages.length === 0 && (
-              <motion.div 
+              <motion.div
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
-                className="h-full flex flex-col items-center justify-center text-center space-y-4 opacity-40"
+                className="empty-state"
               >
-                <Bot size={48} className="text-blue-500 mb-2" />
-                <h3 className="text-xl font-medium">How can I help you today?</h3>
-                <p className="text-sm max-w-sm">Ask about staff attendance, vehicle counts, or security events detected on CCTV.</p>
+                <div className="empty-state-icon">
+                  <Bot size={28} />
+                </div>
+                <h3>How can I help you today?</h3>
+                <p>
+                  Ask about staff attendance, vehicle counts, or security events
+                  detected on CCTV.
+                </p>
               </motion.div>
             )}
-            
+
+            {/* Rendered messages */}
             {messages.map((msg) => (
               <motion.div
                 key={msg.id}
-                initial={{ opacity: 0, y: 10 }}
+                initial={{ opacity: 0, y: 8 }}
                 animate={{ opacity: 1, y: 0 }}
-                className={`flex ${msg.type === 'user' ? 'justify-end' : 'justify-start'}`}
+                transition={{ duration: 0.22 }}
+                className={`msg-row ${msg.type === 'user' ? 'user' : 'bot'}`}
               >
-                <div className={`flex gap-4 max-w-[80%] ${msg.type === 'user' ? 'flex-row-reverse' : 'flex-row'}`}>
-                  <div className={`w-10 h-10 shrink-0 rounded-2xl flex items-center justify-center shadow-lg ${
-                    msg.type === 'user' ? 'bg-slate-800' : 'bg-blue-600'
-                  }`}>
-                    {msg.type === 'user' ? <User size={18} /> : <Bot size={18} />}
+                <div className={`msg-avatar ${msg.type === 'user' ? 'user-avatar' : 'bot-avatar'}`}>
+                  {msg.type === 'user' ? <User size={14} /> : <Bot size={14} />}
+                </div>
+                <div className="msg-content">
+                  <div className={`msg-bubble ${msg.type === 'user' ? 'user-bubble' : 'bot-bubble'}`}>
+                    {msg.type === 'user' ? (
+                      <div className="whitespace-pre-wrap">{msg.content}</div>
+                    ) : (
+                      <div className="prose max-w-none">
+                        <ReactMarkdown remarkPlugins={[remarkGfm]} components={mdComponents}>
+                          {msg.content}
+                        </ReactMarkdown>
+                      </div>
+                    )}
                   </div>
-                  <div className={`space-y-1 ${msg.type === 'user' ? 'items-end' : 'items-start'}`}>
-                    <div className={`p-5 rounded-3xl text-sm leading-relaxed ${
-                      msg.type === 'user' 
-                        ? 'bg-blue-600 text-white rounded-tr-none' 
-                        : 'bg-slate-900 border border-slate-800 rounded-tl-none'
-                    }`}>
-                      {msg.type === 'user' ? (
-                        <div className="whitespace-pre-wrap">{msg.content}</div>
-                      ) : (
-                        <div className="prose prose-invert max-w-none">
-                          <ReactMarkdown 
-                            remarkPlugins={[remarkGfm]}
-                            components={{
-                              a: ({ node, ...props }) => {
-                                const isImage = props.href?.match(/\.(webp|jpg|jpeg|gif|png|Images)/i);
-                                if (isImage) {
-                                  return (
-                                    <div className="mt-4 mb-4 relative group">
-                                      <div className="rounded-xl border border-slate-800 bg-black/40 overflow-hidden transition-all duration-300 hover:border-blue-500 relative">
-                                        <img 
-                                          src={props.href} 
-                                          alt="CCTV Capture" 
-                                          className="w-full max-h-[300px] object-contain block cursor-zoom-in rounded-lg"
-                                          loading="lazy"
-                                          onClick={(e) => {
-                                            e.preventDefault();
-                                            setPreviewImage(props.href || null);
-                                          }}
-                                        />
-                                      </div>
-                                      <p className="text-[10px] text-slate-500 mt-2 px-1 italic">
-                                        Click to preview
-                                      </p>
-                                    </div>
-                                  );
-                                }
-                                return <a {...props} target="_blank" rel="noreferrer" className="text-blue-400 hover:underline" />;
-                              }
-                            }}
-                          >
-                            {msg.content}
-                          </ReactMarkdown>
-                        </div>
-                      )}
-                    </div>
-                    <span className="text-[10px] text-slate-600 block px-1">
-                      {msg.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                    </span>
-                  </div>
+                  <span className="msg-time">
+                    {msg.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                  </span>
                 </div>
               </motion.div>
             ))}
 
+            {/* Typewriter streaming message */}
             {isAnimatingText && (
               <motion.div
-                initial={{ opacity: 0, y: 10 }}
+                initial={{ opacity: 0, y: 8 }}
                 animate={{ opacity: 1, y: 0 }}
-                className="flex justify-start"
+                className="msg-row bot"
               >
-                <div className="flex gap-4 max-w-[80%] flex-row">
-                  <div className="w-10 h-10 shrink-0 rounded-2xl flex items-center justify-center shadow-lg bg-blue-600">
-                    <Bot size={18} />
-                  </div>
-                  <div className="space-y-1 items-start">
-                    <div className="p-5 rounded-3xl text-sm leading-relaxed bg-slate-900 border border-slate-800 rounded-tl-none">
-                      <div className="prose prose-invert max-w-none">
-                        <ReactMarkdown 
-                          remarkPlugins={[remarkGfm]}
-                          components={{
-                            a: ({ node, ...props }) => {
-                              const isImage = props.href?.match(/\.(webp|jpg|jpeg|gif|png|Images)/i);
-                              if (isImage) {
-                                return (
-                                  <div className="mt-4 mb-4 relative group">
-                                    <div className="rounded-xl border border-slate-800 bg-black/40 overflow-hidden transition-all duration-300 hover:border-blue-500 relative">
-                                      <img 
-                                        src={props.href} 
-                                        alt="CCTV Capture" 
-                                        className="w-full max-h-[300px] object-contain block cursor-zoom-in rounded-lg"
-                                        loading="lazy"
-                                        onClick={(e) => {
-                                          e.preventDefault();
-                                          setPreviewImage(props.href || null);
-                                        }}
-                                      />
-                                    </div>
-                                  </div>
-                                );
-                              }
-                              return <a {...props} target="_blank" rel="noreferrer" className="text-blue-400 hover:underline" />;
-                            }
-                          }}
-                        >
-                          {typingText}
-                        </ReactMarkdown>
-                      </div>
+                <div className="msg-avatar bot-avatar">
+                  <Bot size={14} />
+                </div>
+                <div className="msg-content">
+                  <div className="msg-bubble bot-bubble">
+                    <div className="prose max-w-none">
+                      <ReactMarkdown remarkPlugins={[remarkGfm]} components={mdComponents}>
+                        {typingText}
+                      </ReactMarkdown>
                     </div>
                   </div>
                 </div>
               </motion.div>
             )}
 
+            {/* Thinking / progress indicator */}
             {isTyping && !isAnimatingText && (
               <motion.div
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
-                className="flex justify-start"
+                className="thinking-row"
               >
-                <div className="flex gap-4 w-full">
-                  <div className="w-10 h-10 shrink-0 rounded-2xl bg-blue-600 flex items-center justify-center shadow-lg overflow-hidden relative">
-                    <Bot size={18} className="z-10" />
-                  </div>
-                  <div className="flex-1 space-y-3 pt-2">
-                    <div className="space-y-2 max-w-xl">
-                      {activeProgress && (
-                        <motion.div 
-                          key={activeProgress.content}
-                          initial={{ x: -10, opacity: 0 }}
-                          animate={{ x: 0, opacity: 1 }}
-                          className={`flex items-start gap-3 text-xs font-semibold px-4 py-6 rounded-2xl border leading-relaxed overflow-visible animate-pulse ${
-                            activeProgress.type === 'task' 
-                            ? 'text-cyan-400 bg-cyan-500/10 border-cyan-500/40' 
-                            : 'text-blue-400 bg-blue-500/10 border-blue-500/40'
-                          }`}
-                        >
-                          {activeProgress.type === 'task' ? <Cpu size={16} className="mt-1 shrink-0 z-10" /> : <Loader2 size={16} className="mt-1 shrink-0 animate-spin z-10" />}
-                          <div className="z-10 flex-1 py-0.5">
-                            {activeProgress.content}
-                          </div>
-                        </motion.div>
+                <div className="msg-avatar bot-avatar">
+                  <Bot size={14} />
+                </div>
+                <div style={{ flex: 1, paddingTop: '0.2rem' }}>
+                  {activeProgress && (
+                    <motion.div
+                      key={activeProgress.content}
+                      initial={{ x: -8, opacity: 0 }}
+                      animate={{ x: 0, opacity: 1 }}
+                      className={`progress-card ${activeProgress.type === 'task' ? 'task' : 'status'}`}
+                    >
+                      {activeProgress.type === 'task' ? (
+                        <Cpu size={13} className="shrink-0" />
+                      ) : (
+                        <Loader2 size={13} className="animate-spin shrink-0" />
                       )}
-                    </div>
-                  </div>
+                      <span>{activeProgress.content}</span>
+                    </motion.div>
+                  )}
                 </div>
               </motion.div>
             )}
+
           </AnimatePresence>
           <div ref={chatEndRef} />
         </div>
 
-        {/* Input Area */}
-        <div className="p-8 bg-gradient-to-t from-slate-950 via-slate-950 to-transparent">
-          <form 
-            onSubmit={handleSubmit}
-            className="max-w-4xl mx-auto glass rounded-2xl p-2 flex items-center gap-2 border border-slate-800 shadow-2xl"
-          >
-            <div className="pl-4 text-slate-500">
-              <Info size={18} className="cursor-help hover:text-blue-500 transition-colors" />
+        {/* ── Input Area ── */}
+        <div className="chat-input-area">
+          <form onSubmit={handleSubmit} className="chat-input-form">
+            <div className="chat-input-icon">
+              <Info size={15} />
             </div>
-            <input 
+            <input
               value={input}
               onChange={(e) => setInput(e.target.value)}
-              placeholder="Ask for cctv analytics summary..."
-              className="flex-1 bg-transparent border-none outline-none py-3 text-sm placeholder:text-slate-600"
+              placeholder="Ask for cctv analytics summary…"
+              className="chat-input"
               disabled={isTyping}
             />
-            <button 
+            <button
               type="submit"
               disabled={!input.trim() || isTyping}
-              className={`p-3 rounded-xl transition-all ${
-                input.trim() && !isTyping 
-                ? 'bg-blue-600 text-white shadow-lg shadow-blue-500/40 hover:scale-105 active:scale-95' 
-                : 'bg-slate-800 text-slate-600 cursor-not-allowed'
-              }`}
+              className={`btn-send ${input.trim() && !isTyping ? 'active' : 'disabled'}`}
             >
-              <Send size={18} />
+              <Send size={14} />
             </button>
           </form>
-          <p className="text-[10px] text-center text-slate-700 mt-4 tracking-wider font-medium">
-             POWERED BY <span className="text-slate-500">MODEL CONTEXT PROTOCOL</span> & DEEP AGENTS
+          <p className="powered-by">
+            Powered by <span>Model Context Protocol</span> &amp; Deep Agents
           </p>
         </div>
       </main>
-      {/* Image Preview Modal */}
+
+      {/* ═══ IMAGE PREVIEW MODAL ═══ */}
       <AnimatePresence>
         {previewImage && (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            className="fixed inset-0 z-[100] flex items-center justify-center p-6 md:p-20 lg:p-40"
-          >
-            <div 
-              className="absolute inset-0 bg-slate-950/95 backdrop-blur-xl cursor-pointer" 
-              onClick={() => setPreviewImage(null)}
-            />
-            
-            <button 
-              onClick={() => setPreviewImage(null)}
-              className="absolute top-10 right-10 z-[120] p-4 bg-white/10 hover:bg-red-600 text-white rounded-full transition-all duration-300 shadow-2xl backdrop-blur-xl border border-white/20 group hover:scale-110"
+          <ModalKeyHandler onClose={() => setPreviewImage(null)}>
+            {/* Backdrop — click outside = close */}
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.18 }}
+              className="img-preview-overlay"
+              role="dialog"
+              aria-modal="true"
+              aria-label="Image preview"
             >
-              <X size={32} className="group-hover:rotate-90 transition-transform duration-300" />
-            </button>
-
-            <motion.div 
-              initial={{ scale: 0.95, opacity: 0 }}
-              animate={{ scale: 1, opacity: 1 }}
-              exit={{ scale: 0.95, opacity: 0 }}
-              className="relative pointer-events-auto flex items-center justify-center max-w-[90vw] max-h-[85vh]"
-            >
-              <img 
-                src={previewImage} 
-                alt="Preview" 
-                className="block w-auto h-auto max-w-full max-h-full object-contain rounded-2xl shadow-[0_0_80px_rgba(0,0,0,0.8)] border border-white/10"
+              <div
+                className="img-preview-backdrop"
+                onClick={() => setPreviewImage(null)}
               />
-              <div className="absolute -top-12 left-0 bg-blue-600/90 backdrop-blur-md text-white px-5 py-2 rounded-full text-[10px] font-bold tracking-widest uppercase shadow-2xl border border-white/10">
-                Full-Field Visual Evidence
-              </div>
+
+              {/* ── Centered modal card ── */}
+              <motion.div
+                initial={{ scale: 0.93, opacity: 0, y: 16 }}
+                animate={{ scale: 1,    opacity: 1, y: 0  }}
+                exit={{ scale: 0.93,   opacity: 0, y: 8  }}
+                transition={{ type: 'spring', stiffness: 340, damping: 28 }}
+                className="img-preview-modal"
+              >
+                {/* Top bar */}
+                <div className="img-preview-topbar">
+                  <span className="img-preview-topbar-title">
+                    📷 CCTV Evidence
+                  </span>
+                  <div className="img-preview-topbar-actions">
+                    <a
+                      href={previewImage}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="img-preview-open-link"
+                    >
+                      ↗ Full Size
+                    </a>
+                    <button
+                      onClick={() => setPreviewImage(null)}
+                      className="img-preview-close-btn"
+                      autoFocus
+                    >
+                      <X size={14} />
+                      Close
+                    </button>
+                  </div>
+                </div>
+
+                {/* Image */}
+                <div className="img-preview-content">
+                  <img
+                    src={previewImage}
+                    alt="Preview"
+                    onLoad={() => console.log(`[Modal] Large image loaded: ${previewImage}`)}
+                    onError={(e) => {
+                      console.error(`[Modal] Large image failed: ${previewImage}`, e);
+                      (e.target as HTMLImageElement).style.display = 'none';
+                    }}
+                  />
+                </div>
+
+                {/* Bottom hint */}
+                <p className="img-preview-hint">
+                  Click outside or press <kbd>Esc</kbd> to close
+                </p>
+              </motion.div>
             </motion.div>
-          </motion.div>
+          </ModalKeyHandler>
         )}
       </AnimatePresence>
     </div>
