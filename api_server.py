@@ -7,6 +7,7 @@ from dotenv import load_dotenv
 import uvicorn
 from fastapi import FastAPI, HTTPException
 from fastapi.responses import StreamingResponse
+from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field, ConfigDict
 from langchain_core.messages import HumanMessage, AIMessage
 
@@ -19,6 +20,15 @@ load_dotenv()
 # 🌐 FASTAPI IMPLEMENTATION
 # -----------------------------
 app = FastAPI(title="VisionFacts Manager API")
+
+# Enable CORS for all origins, methods, and headers
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 class MessageItem(BaseModel):
     model_config = ConfigDict(extra='allow')

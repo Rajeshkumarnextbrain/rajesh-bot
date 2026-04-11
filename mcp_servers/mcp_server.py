@@ -5,6 +5,8 @@ load_dotenv()
 # Ensure the root project directory is in the path so visionfacts_api can be found
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
+from typing import Optional, Union
+
 from datetime import datetime
 import pytz
 
@@ -181,21 +183,21 @@ def convert_utc_to_ist_readable(utc_str: str) -> str:
 
 @mcp.tool()
 def get_attendances_advanced(
+    start_date: str,
+    end_date: str = "",
     limit: int = 10,
     offset: int = 0,
-    search: str = "",
-    staff_id: str = "",
-    branch_id: int = None,
-    start_date: str = "",
-    end_date: str = "",
-    staff_type: str = ""
+    search: Optional[str] = None,
+    staff_id: Optional[str] = None,
+    branch_id: Optional[int] = None,
+    staff_type: Optional[str] = None
 ) -> dict:
     """
     Retrieves attendance records with flexible filters.
 
     ⚠️ IMPORTANT FOR AI AGENTS:
 
-    1. Dates MUST be in format: YYYY-MM-DD
+    1. start_date & end_date is MANDATORY. Format: YYYY-MM-DD
     - Example: "2026-04-05"
     - Do NOT use "today", "yesterday", or natural language.
 
@@ -208,26 +210,24 @@ def get_attendances_advanced(
     ───────────────────────────────
 
     You can use this tool to:
-    - Get all attendance records
+    - Get attendance for a specific date (MANDATORY start_date & end_date)
     - Search by staff name
     - Filter by staff_id, branch, or staff_type
-    - Filter by date range
+    - Filter by date range (provide start_date & end_date)
 
     Examples:
-    - get_attendances_advanced()
-    - get_attendances_advanced(search="Ahmed")
-    - get_attendances_advanced(staff_id="232")
-    - get_attendances_advanced(start_date="2026-04-05", end_date="2026-04-05")
+    - get_attendances_advanced(start_date="2026-04-05", search="Ahmed")
+    - get_attendances_advanced(start_date="2026-04-01", end_date="2026-04-05")
 
     Args:
-        limit (int): Number of records
-        offset (int): Pagination offset
-        search (str): Search keyword
-        staff_id (str): Staff ID (use get_staffs tool if unknown)
-        branch_id (int): Branch ID
-        start_date (str): Date in YYYY-MM-DD format ONLY
-        end_date (str): Date in YYYY-MM-DD format ONLY
-        staff_type (str): Staff type (e.g., 'shell_staff')
+        start_date (str): Date in YYYY-MM-DD format (MANDATORY).
+        end_date (str): End date in YYYY-MM-DD format (Default: "").
+        limit (int): Number of records to return (Default: 10).
+        offset (int): Pagination offset (Default: 0).
+        search (str, optional): Search keyword for staff name (Default: None).
+        staff_id (str, optional): Specific Staff ID filter (Default: None).
+        branch_id (int, optional): Specific Branch ID filter (Default: None).
+        staff_type (str, optional): Filter by staff category, e.g., 'shell_staff' (Default: None).
     """
 
     # ✅ Do not normalize dates; the API expects raw YYYY-MM-DD strings.
@@ -239,7 +239,7 @@ def get_attendances_advanced(
         search=search or None,
         staff_id=staff_id or None,
         branch_id=branch_id,
-        start_date=start_date or None,
+        start_date=start_date,
         end_date=end_date or None,
         staff_type=staff_type or None
     )
@@ -301,7 +301,7 @@ def get_attendance_logs(attendance_record_id: int) -> dict:
 
 
 @mcp.tool()
-def get_staffs(limit: int = 10, offset: int = 0, search: str = "") -> dict:
+def get_staffs(limit: int = 10, offset: int = 0, search: Optional[str] = None) -> dict:
     """
     Retrieves staff list with optional search.
 
@@ -314,9 +314,9 @@ def get_staffs(limit: int = 10, offset: int = 0, search: str = "") -> dict:
     - get_staffs(search="Ahmed")
 
     Args:
-        limit (int): Number of records
-        offset (int): Pagination offset
-        search (str, optional): Search keyword (name)
+        limit (int): Number of records to return (Default: 10).
+        offset (int): Pagination offset (Default: 0).
+        search (str, optional): Search keyword for staff name (Default: None).
     """
     return api_functions.get_staffs(limit, offset, search if search else None)
 
