@@ -43,10 +43,15 @@ def normalize_to_utc(date_str: str) -> str:
 port = int(os.getenv("MCP_PORT", "8000"))
 mcp = FastMCP("Analytical Tools",port=port)
 
-# Initialize the shared session automatically with default credentials
+# Initialize the shared session automatically with credentials from environment
 try:
     print("Initializing API session...")
-    auth.login("admin@gmail.com", "Abc@12345")
+    email = os.getenv("VISIONFACTS_EMAIL")
+    password = os.getenv("VISIONFACTS_PASSWORD")
+    if not email or not password:
+        print("Warning: VISIONFACTS_EMAIL or VISIONFACTS_PASSWORD not set in environment.")
+    else:
+        auth.login(email, password)
 except Exception as e:
     print(f"Initial login warning: {e}")
 
