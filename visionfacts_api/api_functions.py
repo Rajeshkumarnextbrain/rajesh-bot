@@ -395,5 +395,146 @@ def get_staffs(limit: int = 10, offset: int = 0, search: str = None) -> dict:
     data.pop("Active_Data", None)
     return data
 
+def get_devices(limit: int = 10, offset: int = 0, search: str = None) -> dict:
+    """
+    Retrieves the camera list/devices.
+
+    Args:
+        limit (int): Number of records
+        offset (int): Pagination offset
+        search (str, optional): Pass the spot_name to search for cameras (Optional, not mandatory).
+
+    Returns:
+        dict: Cleaned device data
+    """
+    import json
+
+    filter_params = {
+        "offset": offset,
+        "limit": limit,
+        "skip": offset,
+        "order": "id DESC"
+    }
+
+    filter_json = json.dumps(filter_params)
+
+    url = f"{auth.base_url}/devices"
+    headers = auth.get_auth_header()
+    headers["accept"] = "application/json"
+
+    params = {"filter": filter_json}
+    if search:
+        params["search"] = search
+
+    response = requests.get(url, headers=headers, params=params)
+
+    # 🔁 Token refresh
+    if response.status_code == 401 and auth.email and auth.password:
+        print("Token expired. Re-authenticating...")
+        auth.login(auth.email, auth.password)
+
+        headers = auth.get_auth_header()
+        headers["accept"] = "application/json"
+
+        response = requests.get(url, headers=headers, params=params)
+
+    response.raise_for_status()
+    data = response.json()
+
+    # ✅ Keep only required fields and parse event_type names
+    cleaned_data = []
+    for device in data.get("data", []):
+        event_types = []
+        if device.get("event_type"):
+            try:
+                events = json.loads(device.get("event_type"))
+                event_types = [entry.get("name") for entry in events if entry.get("name")]
+            except Exception:
+                pass
+                
+        cleaned_data.append({
+            "id": device.get("id"),
+            "spot_name": device.get("spot_name"),
+            "status": device.get("status"),
+            "is_restricted": device.get("is_restricted"),
+            "event_type": event_types,
+            "location_name": device.get("location_name"),
+            "property_name": device.get("property_name")
+        })
+
+    data["data"] = cleaned_data
+    return data
+
+def get_detailed_events(
+    start_date: str, 
+    end_date: str, 
+    limit: int = 10, 
+    offset: int = 0, 
+    event_type: str = None, 
+    spot_name: str = None, 
+    status: bool = None
+) -> dict:
+    """
+    Retrieves detailed event logs based on filters.
+    
+    Args:
+        start_date (str): Start date in YYYY-MM-DD (MANDATORY).
+        end_date (str): End date in YYYY-MM-DD (MANDATORY).
+        limit (int): Number of records.
+        offset (int): Pagination offset.
+        event_type (str, optional): Filter by event type (e.g., "Intrusion detection").
+        spot_name (str, optional): Filter by camera spot name.
+        status (bool, optional): Filter by event status.
+        
+    Returns:
+        dict: Event data
+    """
+    import json
+    
+    filter_params = {
+        "offset": offset,
+        "limit": limit,
+        "skip": offset,
+        "order": "id DESC"
+    }
+
+    url = f"{auth.base_url}/events"
+    headers = auth.get_auth_header()
+    headers["accept"] = "application/json"
+    
+    params = {
+        "filter": json.dumps(filter_params)
+    }
+    
+    if event_type:
+        params["filterValues[event_type]"] = event_type
+    if start_date:
+        params["filterValues[start_date]"] = start_date
+    if end_date:
+        params["filterValues[end_date]"] = end_date
+    if spot_name:
+        params["filterValues[spot_name]"] = spot_name
+    if status is not None:
+        params["filterValues[status]"] = str(status).lower()
+
+    response = requests.get(url, headers=headers, params=params)
+
+    if response.status_code == 401 and auth.email and auth.password:
+        auth.login(auth.email, auth.password)
+        headers = auth.get_auth_header()
+        headers["accept"] = "application/json"
+        response = requests.get(url, headers=headers, params=params)
+
+    response.raise_for_status()
+    data = response.json()
+    
+    for event in data.get("data", []):
+        if event.get("image"):
+            event["image"] = f"{auth.base_url}{event['image']}"
+        event["date"] = convert_utc_to_ist_readable(event.get("date"))
+        event["created_at"] = convert_utc_to_ist_readable(event.get("created_at"))
+        
+    return data
+
 if __name__ == "__main__":
     print(get_attendances().get("data")[0])

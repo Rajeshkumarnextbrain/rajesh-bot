@@ -321,6 +321,62 @@ def get_staffs(limit: int = 10, offset: int = 0, search: Optional[str] = None) -
     return api_functions.get_staffs(limit, offset, search if search else None)
 
 
+@mcp.tool()
+def get_camera_list(limit: int = 10, offset: int = 0, search: Optional[str] = None) -> dict:
+    """
+    Retrieves the list of cameras (devices) with their details, limits, and supported event types.
+    
+    Use this tool to:
+    - Get a list of all configured cameras.
+    - Search for a specific camera by spot_name.
+    - Check the spot_name, location_name, and property_name of cameras.
+    - See what event types or detections are enabled on each camera.
+    
+    Args:
+        limit (int): Number of records to return (Default: 10).
+        offset (int): Pagination offset (Default: 0).
+        search (str, optional): Search keyword for spot_name (Default: None).
+    """
+    return api_functions.get_devices(limit, offset, search)
+
+@mcp.tool()
+def get_detailed_events(
+    start_date: str,
+    end_date: str,
+    limit: int = 10,
+    offset: int = 0,
+    event_type: Optional[str] = None,
+    spot_name: Optional[str] = None,
+    status: Optional[bool] = None
+) -> dict:
+    """
+    Retrieves detailed logs for specific events. Useful for listing recent events, looking for intrusions, checking specific dates, etc.
+    
+    1. start_date & end_date format: YYYY-MM-DD
+    - Example: "2026-04-12"
+    - Do NOT use "today", "yesterday", or natural language here.
+    2. If you do NOT know the current date and need 'today' or 'yesterday':
+    → FIRST call `get_current_time` tool and extract the respective YYYY-MM-DD dates to use here.
+    
+    Args:
+        start_date (str): Start date string in YYYY-MM-DD format (MANDATORY).
+        end_date (str): End date string in YYYY-MM-DD format (MANDATORY).
+        limit (int): Number of records to return (Default: 10).
+        offset (int): Pagination offset (Default: 0).
+        event_type (str, optional): Filter by event type (e.g., "Intrusion detection").
+        spot_name (str, optional): Filter by specific camera (e.g., "HO-CAM-06").
+        status (bool, optional): Event status filter.
+    """
+    return api_functions.get_detailed_events(
+        start_date=start_date,
+        end_date=end_date,
+        limit=limit,
+        offset=offset,
+        event_type=event_type,
+        spot_name=spot_name,
+        status=status
+    )
+
 if __name__ == "__main__":
     import os
     # Get configuration from environment variables

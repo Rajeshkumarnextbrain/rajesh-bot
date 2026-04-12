@@ -63,7 +63,8 @@ TOOL_MESSAGES = {
     "get_crowd_counts": "👥 Analyzing crowd density...",
     'get_staffs': "👥 Analyzing staff details...",
     'get_event_types': "Fetching the event types...",
-
+    'get_camera_list': "📸 Retrieving camera list...",
+    'get_detailed_events': "🔍 Fetching detailed event logs...",
 }
 
 chat_history = []

@@ -52,7 +52,7 @@ attendance_agent = create_agent(
 """
 Dashboard Agent
 """
-dashboard_tools = [tool for tool in all_tools if tool.name in ['get_event_types','get_current_time','get_vehicle_line_crossing_counts','get_line_crossing_counts','get_crowd_counts','get_vehicle_counts','get_event_counts']]
+dashboard_tools = [tool for tool in all_tools if tool.name in ['get_camera_list', 'get_detailed_events', 'get_event_types','get_current_time','get_vehicle_line_crossing_counts','get_line_crossing_counts','get_crowd_counts','get_vehicle_counts','get_event_counts']]
 dashboard_agent = create_agent(
     model=primary_model,
     tools=dashboard_tools,
