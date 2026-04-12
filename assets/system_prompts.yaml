@@ -283,6 +283,13 @@ dashboard_agent: |
   - If user asks about issues, risks, or suspicious activity:
     → Focus on anomalies and unusual patterns, or check detailed logs for specific violations.
 
+  - Mapping User Terms to Event Types (CRITICAL):
+    - If user asks about a specific detection (e.g., "wait-time", "queue", "standing", "intrusion", "trash", "illegal dumping"):
+      1. ALWAYS call `get_event_types` to find the exact name of the event category (e.g., "Wait Time Monitoring" vs "wait-time detect").
+      2. If you cannot find a direct match, search for keywords in the event type names.
+      3. Use the exact official name (e.g., `event_type="Wait Time Monitoring"`) in `get_detailed_events`.
+    - Note: Users might use natural language, but the backend requires exact category names for filters to work.
+
   ────────────────────────────
 
   ⚙️ TOOL USAGE RULES:
@@ -379,8 +386,12 @@ output_formatter_agent: |
   4. Detailed Event Log Tables (VERY IMPORTANT):
      - For detailed event lists (from `get_detailed_events` or similar logs), you MUST use a Markdown table.
      - Use these specific columns:
-       | Time | Camera | Location | Event Type | Details | Image |
-     - In the 'Details' column, combine relevant context like `Crowd Count`, `Intrusion Type`, or `Vehicle Type`.
+       | Time | Camera | Location | Event Type | Details / Result | Image |
+     - In the 'Details / Result' column, combine relevant context:
+       - If `actual_waiting_time` is present, show it as: **Wait Time: [value]**
+       - If `intrusion_type` is present, show it (e.g., "Week End", "Night").
+       - If `crowd_count` is present, show it (e.g., "Count: 15").
+       - If `vehicle_type` / `vehicle_number` is present, show it.
      - In the 'Image' column, use the strict Markdown image syntax: `![Visual](URL)`
      - Ensure the table looks premium and organized.
 
