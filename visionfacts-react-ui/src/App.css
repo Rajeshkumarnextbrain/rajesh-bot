@@ -592,10 +592,25 @@ body {
   font-size: 0.73rem;
   font-weight: 500;
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   gap: 0.55rem;
   max-width: 28rem;
   animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+
+.progress-card span {
+  display: -webkit-box;
+  -webkit-line-clamp: 5;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  word-break: break-word;
+  white-space: pre-wrap;
+  margin-top: 0.1rem;
+}
+
+.progress-card svg {
+  margin-top: 0.2rem;
 }
 
 .progress-card.status {

@@ -188,7 +188,7 @@ function App() {
   const chatEndRef = useRef<HTMLDivElement>(null);
   const chatContainerRef = useRef<HTMLDivElement>(null);
   const [userHasScrolledUp, setUserHasScrolledUp] = useState(false);
-  const apiHost = 'http://localhost:9000';
+  const apiHost = import.meta.env.VITE_API_HOST || 'http://localhost:9000';
 
   /* ── Persist theme preference ── */
   useEffect(() => {

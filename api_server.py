@@ -59,7 +59,6 @@ async def run_agent_api_stream(query: str, session_id: str):
     
     seen_tasks = set()
     seen_tools = set()
-    final_printed = False
     full_final_answer = ""
 
     messages = {"messages": chat_history + [HumanMessage(content=query)]}
@@ -92,7 +91,7 @@ async def run_agent_api_stream(query: str, session_id: str):
                                 tool_msg = TOOL_MESSAGES.get(tool_name, "🔄 Processing...")
                                 yield json.dumps({"type": "tool", "content": tool_msg}) + "\n"
                 
-                elif not final_printed:
+                elif getattr(msg, "content", None):
                     content = msg.content
                     final_text = ""
                     if isinstance(content, str) and content.strip():
@@ -106,12 +105,11 @@ async def run_agent_api_stream(query: str, session_id: str):
                         final_text = "".join(text_parts).strip()
                     
                     if final_text:
-                        final_printed = True
                         full_final_answer = final_text
-                        yield json.dumps({"type": "answer", "content": final_text}) + "\n"
 
-    # Update session history after completion
+    # Update session history and yield final message after completion
     if full_final_answer:
+        yield json.dumps({"type": "answer", "content": full_final_answer}) + "\n"
         sessions[session_id].append(HumanMessage(content=query))
         sessions[session_id].append(AIMessage(content=full_final_answer))
 

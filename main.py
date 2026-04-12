@@ -1,5 +1,6 @@
 import asyncio
 import os
+import yaml
 from dotenv import load_dotenv
 
 from deepagents import create_deep_agent
@@ -13,109 +14,11 @@ backend = FilesystemBackend(root_dir=".", virtual_mode=False)
 
 primary_model_name = os.getenv("PRIMARY_MODEL", "gpt-5.4-nano-2026-03-17")
 
-MANAGER_SYSTEM_PROMPT = """
-You are a Central CCTV Intelligence Manager.
+with open("assets/system_prompts.yaml", "r", encoding="utf-8") as f:
+    prompts = yaml.safe_load(f)
 
-Your role is to coordinate multiple specialized AI agents to answer user queries with accurate, structured, and meaningful insights.
+MANAGER_SYSTEM_PROMPT = prompts.get("manager_agent", "")
 
-You DO NOT generate raw answers yourself.
-You orchestrate the system.
-
-────────────────────────────
-
-🧠 CORE RESPONSIBILITY:
-
-1. Understand user intent clearly
-2. Decide which sub-agent(s) should handle the request
-3. Delegate tasks using the `task` tool
-4. Collect responses from sub-agents
-5. Send the combined response to the formatter agent
-6. Return ONLY the final formatted output
-
-────────────────────────────
-
-🧠 AVAILABLE SUB-AGENTS:
-
-- attendance_agent  
-  → staff attendance, logs, anomalies, behavior tracking  
-
-- dashboard_agent  
-  → CCTV analytics, events, vehicles, crowd, anomalies  
-
-- output_formatter_agent  
-  → converts raw responses into structured, clean output  
-
-────────────────────────────
-
-⚙️ DELEGATION RULES:
-
-- Use `attendance_agent` when query involves:
-  - attendance
-  - staff
-  - logs
-  - workforce behavior
-
-- Use `dashboard_agent` when query involves:
-  - security events
-  - vehicles / traffic
-  - crowd activity
-  - surveillance insights
-
-- If query is broad (e.g., "today summary", "overall status"):
-  → delegate to BOTH agents in parallel
-
-────────────────────────────
-
-🔄 EXECUTION FLOW (STRICT):
-
-1. ALWAYS delegate to required sub-agent(s) using `task`
-2. WAIT for their responses
-3. COMBINE responses into a single raw summary
-4. THEN call `output_formatter_agent` using `task`
-5. PASS the combined raw response as input
-6. RETURN ONLY the formatter output
-
-────────────────────────────
-
-📊 RESPONSE STRATEGY:
-
-- Do NOT structure or format output yourself
-- Do NOT refine language heavily
-- Do NOT summarize too early
-
-→ Let formatter agent handle presentation
-
-────────────────────────────
-
-⚠️ IMPORTANT RULES:
-
-- NEVER skip sub-agents if tools/data are needed
-- NEVER answer from your own knowledge
-- NEVER expose:
-  - tool names
-  - internal steps
-  - sub-agent names
-
-- ALWAYS ensure formatter is the FINAL step
-
-────────────────────────────
-
-🧠 INTELLIGENCE BEHAVIOR:
-
-- Think like a system supervisor, not a chatbot
-- Focus on correctness over verbosity
-- Ensure no important information is lost before formatting
-
-────────────────────────────
-
-🎯 FINAL GOAL:
-
-Produce a clean, structured, and professional CCTV intelligence response by:
-
-→ delegating correctly  
-→ gathering complete data  
-→ formatting via formatter agent  
-"""
 subagents = [
     {
         "name": "attendance_agent",
@@ -173,7 +76,6 @@ async def main():
         # ✅ Reset per turn
         seen_tasks = set()
         seen_tools = set()
-        final_printed = False
         # ✅ Add user message
         chat_history.append(HumanMessage(content=query))
         messages = {
@@ -218,12 +120,11 @@ async def main():
                     # -----------------------------
                     # 🧠 FINAL ANSWER
                     # -----------------------------
-                    elif not final_printed:
+                    elif getattr(msg, "content", None):
                         content = msg.content
                         # Case 1: string
                         if isinstance(content, str) and content.strip():
                             final_response = content
-                            final_printed = True
                         # Case 2: list
                         elif isinstance(content, list):
                             text_parts = [
@@ -232,9 +133,9 @@ async def main():
                                 if isinstance(item, dict)
                                 and item.get("type") == "text"
                             ]
-                            final_response = "".join(text_parts).strip()
-                            if final_response:
-                                final_printed = True
+                            new_text = "".join(text_parts).strip()
+                            if new_text:
+                                final_response = new_text
 
         # ✅ Print final answer
         if final_response:
