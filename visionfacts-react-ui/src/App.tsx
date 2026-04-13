@@ -88,22 +88,36 @@ const CCTVImage: React.FC<{ src: string; onOpen: (s: string) => void }> = ({ src
         onOpen(src);
       }}
       title="Click to view full size"
+      style={{ aspectRatio: '16/9', position: 'relative', overflow: 'hidden' }}
     >
-      {/* Spinner shown until the browser fires onLoad */}
+      {/* Premium Shimmer Skeleton */}
       {!loaded && (
-        <div className="cctv-img-loading">
-          <Loader2 size={15} className="animate-spin" />
-          <span>Loading image…</span>
-        </div>
+        <div 
+           className="premium-skeleton" 
+           style={{ 
+             position: 'absolute',
+             inset: 0,
+             borderRadius: 'inherit',
+             zIndex: 1
+           }} 
+        />
       )}
 
-      {/* Native img — never CORS-blocked */}
+      {/* Native img — with cinematic reveal */}
       <img
         key={src}
         src={src}
         alt="CCTV Capture"
-        loading="lazy"
-        style={{ display: loaded ? 'block' : 'none' }}
+        className={loaded ? 'cinematic-reveal' : ''}
+        style={{ 
+          opacity: 0, /* Start invisible, animation drives it to 1 */
+          display: 'block',
+          width: '100%',
+          height: '100%',
+          objectFit: 'cover',
+          position: 'relative',
+          zIndex: 2
+        }}
         onLoad={() => {
           console.log(`[CCTVImage] Successfully loaded: ${src}`);
           setLoaded(true);
@@ -176,6 +190,7 @@ function App() {
   const [typingText, setTypingText] = useState('');
   const [previewImage, setPreviewImage] = useState<string | null>(null);
   const [darkMode, setDarkMode] = useState(true); // default to dark
+  const abortControllerRef = useRef<AbortController | null>(null);
 
   const [sessionId, setSessionId] = useState<string>(() => {
     const saved = localStorage.getItem('vf_session_id');
@@ -194,6 +209,15 @@ function App() {
   useEffect(() => {
     const saved = localStorage.getItem('vf_dark_mode');
     if (saved !== null) setDarkMode(saved === 'true');
+    
+    // Abort ongoing server requests if the user closes the window/tab
+    const handleBeforeUnload = () => {
+      if (abortControllerRef.current) {
+        abortControllerRef.current.abort();
+      }
+    };
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    return () => window.removeEventListener('beforeunload', handleBeforeUnload);
   }, []);
 
   const toggleDarkMode = () => {
@@ -206,20 +230,26 @@ function App() {
   /* ── Auto-scroll ── */
   useEffect(() => {
     if (!userHasScrolledUp) {
-      chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+      chatEndRef.current?.scrollIntoView({ behavior: 'auto' });
     }
-  }, [messages, activeProgress, typingText]);
+  }, [messages, activeProgress, typingText, userHasScrolledUp]);
 
   const handleScroll = () => {
     if (!chatContainerRef.current) return;
     const { scrollTop, scrollHeight, clientHeight } = chatContainerRef.current;
-    setUserHasScrolledUp(scrollHeight - scrollTop - clientHeight > 100);
+    // Lower threshold so manual scrolling up is detected precisely.
+    setUserHasScrolledUp(scrollHeight - Math.ceil(scrollTop) - clientHeight > 30);
   };
 
   /* ── Session management ── */
   const clearHistory = () => {
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+      abortControllerRef.current = null;
+    }
     setMessages([]);
     setActiveProgress(null);
+    setIsTyping(false);
     const newId = `sess_${Math.random().toString(36).substr(2, 9)}`;
     setSessionId(newId);
     localStorage.setItem('vf_session_id', newId);
@@ -242,11 +272,17 @@ function App() {
     setIsTyping(true);
     setActiveProgress({ type: 'status', content: '🤖 Initializing...' });
 
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+    }
+    abortControllerRef.current = new AbortController();
+
     try {
       const response = await fetch(`${apiHost}/chat`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ query, session_id: sessionId }),
+        signal: abortControllerRef.current.signal,
       });
 
       if (!response.body) throw new Error('No response body');
@@ -304,7 +340,13 @@ function App() {
           }
         }
       }
-    } catch (err) {
+    } catch (err: any) {
+      if (err.name === 'AbortError') {
+        console.log('Generation aborted by user.');
+        setIsTyping(false);
+        setActiveProgress(null);
+        return;
+      }
       console.error('Fetch error:', err);
       const errorMsg: Message = {
         id: 'error-' + Date.now(),
@@ -499,27 +541,40 @@ function App() {
             {/* Thinking / progress indicator */}
             {isTyping && !isAnimatingText && (
               <motion.div
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                className="thinking-row"
+                initial={{ opacity: 0, y: 8 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="msg-row bot"
               >
                 <div className="msg-avatar bot-avatar">
                   <Bot size={14} />
                 </div>
-                <div style={{ flex: 1, paddingTop: '0.2rem' }}>
-                  {activeProgress && (
-                    <motion.div
+                <div className="msg-content" style={{ width: '100%', maxWidth: '18rem' }}>
+                  <div className="msg-bubble bot-bubble" style={{ padding: '1rem 1.2rem', width: '100%' }}>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.7rem' }}>
+                      <div className="premium-skeleton" style={{ height: '0.55rem', borderRadius: '4px', width: '92%' }} />
+                      <div className="premium-skeleton" style={{ height: '0.55rem', borderRadius: '4px', width: '100%' }} />
+                      <div className="premium-skeleton" style={{ height: '0.55rem', borderRadius: '4px', width: '60%' }} />
+                    </div>
+                  </div>
+                  {activeProgress && activeProgress.content !== '🤖 Initializing...' && (
+                    <motion.div 
                       key={activeProgress.content}
-                      initial={{ x: -8, opacity: 0 }}
-                      animate={{ x: 0, opacity: 1 }}
-                      className={`progress-card ${activeProgress.type === 'task' ? 'task' : 'status'}`}
+                      initial={{ opacity: 0 }} 
+                      animate={{ opacity: 1 }}
+                      style={{ fontSize: '0.62rem', color: 'var(--text-muted)', display: 'flex', alignItems: 'flex-start', gap: '0.35rem', marginTop: '0.2rem', paddingLeft: '0.3rem', fontStyle: 'italic' }}
                     >
-                      {activeProgress.type === 'task' ? (
-                        <Cpu size={13} className="shrink-0" />
-                      ) : (
-                        <Loader2 size={13} className="animate-spin shrink-0" />
-                      )}
-                      <span>{activeProgress.content}</span>
+                      <Cpu size={11} className="animate-pulse" style={{ marginTop: '0.1rem', flexShrink: 0 }} />
+                      <span style={{
+                        display: '-webkit-box',
+                        WebkitLineClamp: 5,
+                        WebkitBoxOrient: 'vertical',
+                        overflow: 'hidden',
+                        textOverflow: 'ellipsis',
+                        wordBreak: 'break-word',
+                        whiteSpace: 'pre-wrap'
+                      }}>
+                        {activeProgress.content.replace('🤖 ', '')}
+                      </span>
                     </motion.div>
                   )}
                 </div>
@@ -532,7 +587,7 @@ function App() {
 
         {/* ── Input Area ── */}
         <div className="chat-input-area">
-          <form onSubmit={handleSubmit} className="chat-input-form">
+          <form onSubmit={handleSubmit} className="chat-input-form" style={{ display: isTyping ? 'none' : 'flex' }}>
             <div className="chat-input-icon">
               <Info size={15} />
             </div>
@@ -551,9 +606,6 @@ function App() {
               <Send size={14} />
             </button>
           </form>
-          <p className="powered-by">
-            Powered by <span>Model Context Protocol</span> &amp; Deep Agents
-          </p>
         </div>
       </main>
 

@@ -747,6 +747,44 @@ body {
   font-size: 0.75rem;
 }
 
+/* ── Markdown Table Styles ── */
+.prose table {
+  width: 100%;
+  display: block;
+  overflow-x: auto;
+  border-collapse: separate;
+  border-spacing: 0;
+  margin: 1.25rem 0;
+  border-radius: 0.75rem;
+  border: 1px solid var(--border-main);
+  box-shadow: var(--s1);
+}
+.prose th, .prose td {
+  padding: 0.85rem 1rem;
+  text-align: left;
+  border-bottom: 1px solid var(--border-main);
+  font-size: 0.78rem;
+  white-space: nowrap;
+}
+.prose th {
+  background-color: var(--bg-surface-alt);
+  font-weight: 700;
+  color: var(--text-primary);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  font-size: 0.7rem;
+}
+.prose tr:last-child th,
+.prose tr:last-child td {
+  border-bottom: none;
+}
+.prose tbody tr {
+  transition: background-color var(--tf);
+}
+.prose tbody tr:hover {
+  background-color: var(--acc-subtle);
+}
+
 /* ── CCTV Image thumbnail ── */
 .cctv-img-wrapper {
   margin: 0.65rem 0 0;
@@ -1083,5 +1121,51 @@ body {
 .w-full       { width: 100%; }
 .h-full       { height: 100%; }
 .cursor-pointer  { cursor: pointer; }
-.whitespace-pre-wrap { white-space: pre-wrap; }
 .max-w-none   { max-width: none; }
+
+/* ================================================================
+   PREMIUM CLIENT-FACING ANIMATIONS
+================================================================ */
+.premium-skeleton {
+  background: linear-gradient(110deg, 
+    var(--acc-subtle) 30%, 
+    var(--border-strong) 50%, 
+    var(--acc-subtle) 70%
+  );
+  background-size: 200% 100%;
+  animation: shimmerWave 1.6s infinite linear;
+  box-shadow: inset 0 0 20px rgba(0,0,0,0.02);
+}
+
+@keyframes shimmerWave {
+  0% { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+
+.cctv-img-wrapper {
+  transform: perspective(1000px) translateZ(0); /* Hardware acceleration for smooth zoom */
+}
+
+/* Enhances hover effect to be much punchier */
+.cctv-img-wrapper:hover {
+  transform: scale(1.015) translateY(-2px);
+  box-shadow: 0 12px 32px var(--acc-glow), 0 0 0 1px var(--acc1);
+  border-color: transparent;
+}
+
+.cinematic-reveal {
+  animation: cinematicEnter 0.6s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+@keyframes cinematicEnter {
+  0% { 
+    transform: scale(1.08); 
+    filter: blur(8px) brightness(1.2); 
+    opacity: 0;
+  }
+  100% { 
+    transform: scale(1); 
+    filter: blur(0px) brightness(1); 
+    opacity: 1;
+  }
+}
