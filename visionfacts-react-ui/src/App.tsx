@@ -16,6 +16,7 @@ import {
   X,
   Sun,
   Moon,
+  ChevronDown,
 } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
@@ -176,7 +177,12 @@ function makeMarkdownComponents(onImageClick: (src: string) => void) {
     },
     img: ({ node, ...props }: any) => {
       return <ImagePreview src={props.src} alt={props.alt} />;
-    }
+    },
+    table: ({ node, ...props }: any) => (
+      <div className="markdown-table-wrapper">
+        <table {...props} />
+      </div>
+    )
   };
 }
 
@@ -289,30 +295,31 @@ function App() {
 
       const reader = response.body.getReader();
       const decoder = new TextDecoder();
-      let assistantMsgContent = '';
+      let buffer = '';
 
-      while (true) {
-        const { value, done } = await reader.read();
-        if (done) break;
+      const processLine = (line: string) => {
+        const trimmedLine = line.trim();
+        if (!trimmedLine) return;
 
-        const chunk = decoder.decode(value, { stream: true });
-        const lines = chunk.split('\n');
+        // Handle cases where multiple JSON objects are joined without newlines
+        const parts = trimmedLine.replace(/}{/g, '}\n{').split('\n');
+        
+        for (let part of parts) {
+          part = part.trim();
+          if (!part) continue;
 
-        for (const line of lines) {
-          if (!line.trim()) continue;
           try {
-            const data: UpdateChunk = JSON.parse(line);
+            const jsonStr = part.startsWith('data: ') ? part.substring(6).trim() : part;
+            const data: UpdateChunk = JSON.parse(jsonStr);
 
             if (data.type === 'status') {
-              setActiveProgress(prev => ({ ...prev, status: data.content }));
+              setActiveProgress(prev => ({ ...(prev || {}), status: data.content }));
             } else if (data.type === 'task') {
-              setActiveProgress(prev => ({ ...prev, task: data.content }));
+              setActiveProgress(prev => ({ ...(prev || {}), task: data.content }));
             } else if (data.type === 'tool') {
-              setActiveProgress(prev => ({ ...prev, tool: data.content }));
+              setActiveProgress(prev => ({ ...(prev || {}), tool: data.content }));
             } else if (data.type === 'answer') {
-              assistantMsgContent = data.content;
               setIsAnimatingText(true);
-
               let currentIdx = 0;
               const text = data.content;
               const interval = setInterval(() => {
@@ -333,11 +340,28 @@ function App() {
                   setActiveProgress(null);
                   setIsTyping(false);
                 }
-              }, 15);
+              }, 12);
             }
           } catch (err) {
-            console.error('Error parsing SSE chunk:', err, line);
+            console.error('Failed to parse chunk:', err, part);
           }
+        }
+      };
+
+      while (true) {
+        const { value, done } = await reader.read();
+        
+        if (done) {
+          if (buffer.trim()) processLine(buffer);
+          break;
+        }
+
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split('\n');
+        buffer = lines.pop() || '';
+
+        for (const line of lines) {
+          processLine(line);
         }
       }
     } catch (err: any) {
@@ -553,18 +577,20 @@ function App() {
                   <Bot size={14} />
                 </div>
                 <div className="msg-content" style={{ width: '100%', maxWidth: '18rem' }}>
-                  <div className="msg-bubble bot-bubble" style={{ padding: '1rem 1.2rem', width: '100%', minWidth: '16rem' }}>
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.65rem' }}>
-                      {/* Always show skeleton while thinking */}
-                      <div className="premium-skeleton" style={{ height: '0.55rem', borderRadius: '4px', width: '92%' }} />
-                      <div className="premium-skeleton" style={{ height: '0.55rem', borderRadius: '4px', width: '100%' }} />
-                      <div className="premium-skeleton" style={{ height: '0.55rem', borderRadius: '4px', width: '60%' }} />
+                  {!isAnimatingText && (
+                    <div className="msg-bubble bot-bubble" style={{ padding: '1rem 1.2rem', width: '100%', minWidth: '16rem' }}>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '0.65rem' }}>
+                        {/* Always show skeleton while thinking */}
+                        <div className="premium-skeleton" style={{ height: '0.55rem', borderRadius: '4px', width: '92%' }} />
+                        <div className="premium-skeleton" style={{ height: '0.55rem', borderRadius: '4px', width: '100%' }} />
+                        <div className="premium-skeleton" style={{ height: '0.55rem', borderRadius: '4px', width: '60%' }} />
+                      </div>
                     </div>
-                  </div>
+                  )}
 
-                  {/* Render active progress steps BELOW the bubble in the highlighted area */}
+                  {/* Render active progress steps BELOW the bubble area */}
                   {activeProgress && (
-                    <div className="thinking-steps-outer" style={{ marginTop: '0.75rem', paddingLeft: '0.5rem', display: 'flex', flexDirection: 'column', gap: '0.55rem' }}>
+                    <div className="thinking-steps-outer" style={{ marginTop: isAnimatingText ? '0rem' : '0.75rem', paddingLeft: '0.5rem', display: 'flex', flexDirection: 'column', gap: '0.55rem' }}>
                       <AnimatePresence mode="popLayout">
                         {activeProgress.status && (
                           <motion.div 
@@ -585,7 +611,7 @@ function App() {
                             className="thinking-step-mini task"
                           >
                             <Info size={13} className="step-icon" />
-                            <span>{activeProgress.task}</span>
+                            <span style={{ fontSize: '0.65rem', opacity: 0.8 }}>{activeProgress.task}</span>
                           </motion.div>
                         )}
                         {activeProgress.tool && (
@@ -606,9 +632,50 @@ function App() {
               </motion.div>
             )}
 
+            {/* Thinking / progress indicator wrapper fallback */}
+            {isTyping && !isAnimatingText && !activeProgress && (
+              <motion.div
+                initial={{ opacity: 0, y: 8 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="msg-row bot"
+              >
+                <div className="msg-avatar bot-avatar">
+                  <Bot size={14} />
+                </div>
+                <div className="msg-content" style={{ width: '100%', maxWidth: '18rem' }}>
+                  <div className="msg-bubble bot-bubble" style={{ padding: '1rem 1.2rem', width: '100%', minWidth: '16rem' }}>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.65rem' }}>
+                      <div className="premium-skeleton" style={{ height: '0.55rem', borderRadius: '4px', width: '92%' }} />
+                      <div className="premium-skeleton" style={{ height: '0.55rem', borderRadius: '4px', width: '100%' }} />
+                      <div className="premium-skeleton" style={{ height: '0.55rem', borderRadius: '4px', width: '60%' }} />
+                    </div>
+                  </div>
+                </div>
+              </motion.div>
+            )}
+
           </AnimatePresence>
           <div ref={chatEndRef} />
         </div>
+
+        {/* Floating scroll-to-bottom button */}
+        <AnimatePresence>
+          {userHasScrolledUp && (
+            <motion.button
+              initial={{ opacity: 0, y: 12, x: '-50%' }}
+              animate={{ opacity: 1, y: 0, x: '-50%' }}
+              exit={{ opacity: 0, y: 12, x: '-50%' }}
+              onClick={() => {
+                setUserHasScrolledUp(false);
+                chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+              }}
+              className="scroll-to-bottom-btn"
+            >
+              <ChevronDown size={14} />
+              <span>Scroll to latest</span>
+            </motion.button>
+          )}
+        </AnimatePresence>
 
         {/* ── Input Area ── */}
         <div className="chat-input-area">
