@@ -8,6 +8,7 @@ from langchain_core.messages import HumanMessage, AIMessage
 from deepagents.backends.filesystem import FilesystemBackend
 
 from agents import attendance_agent, dashboard_agent, output_formatter_agent
+from langchain_openai import ChatOpenAI
 
 load_dotenv()
 backend = FilesystemBackend(root_dir=".", virtual_mode=False)
@@ -44,7 +45,7 @@ subagents = [
 
 
 agent = create_deep_agent(
-    model=f"openai:{primary_model_name}",
+    model=ChatOpenAI(model=primary_model_name, max_retries=5),
     subagents=subagents,
     system_prompt=MANAGER_SYSTEM_PROMPT,
     backend=backend,
@@ -80,7 +81,7 @@ async def main():
         # ✅ Add user message
         chat_history.append(HumanMessage(content=query))
         messages = {
-            "messages": chat_history
+            "messages": chat_history[-10:]
         }
         final_response = ""
         async for chunk in agent.astream(

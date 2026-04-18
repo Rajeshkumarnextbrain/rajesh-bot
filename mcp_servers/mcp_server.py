@@ -1,20 +1,26 @@
 import os
 import sys
+import hashlib
+import json
+from typing import Optional, Union
+from datetime import datetime
+import pytz
 from dotenv import load_dotenv
+
+from mcp.server.fastmcp import FastMCP
+import dateparser
+import toons
+import redis
+
 load_dotenv()
 # Ensure the root project directory is in the path so visionfacts_api can be found
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from typing import Optional, Union
 
-from datetime import datetime
-import pytz
-
-from mcp.server.fastmcp import FastMCP
 from visionfacts_api.auth_manager import auth
 from visionfacts_api import api_functions
-import dateparser
-from datetime import datetime
+
+
 
 def normalize_to_utc(date_str: str) -> str:
     """
@@ -58,6 +64,41 @@ except Exception as e:
     print(f"Initial login warning: {e}")
 
 
+# Redis connection
+redis_client = redis.Redis(
+    host=os.getenv("REDIS_HOST", "localhost"),
+    port=int(os.getenv("REDIS_PORT", "6379")),
+    db=int(os.getenv("REDIS_DB", "0")),
+    password=os.getenv("REDIS_PASSWORD", ""),
+    decode_responses=True
+)
+
+def normalize_kwargs(kwargs):
+    normalized = {}
+    for k, v in kwargs.items():
+        if isinstance(v, str):
+            v = v.strip().lower()
+        elif v is None:
+            v = ""
+        normalized[k] = v
+
+    return normalized
+
+
+def generate_cache_key(tool_name, kwargs):
+    kwargs = normalize_kwargs(kwargs)
+    raw = json.dumps(kwargs, sort_keys=True)
+    print("before : cache",tool_name,kwargs)
+    return f"cache:{tool_name}:{hashlib.md5(raw.encode()).hexdigest()}"
+
+
+def get_cached_data(key: str):
+    try:
+        return redis_client.get(key)
+    except Exception:
+        return None
+
+
 @mcp.tool()
 def get_event_counts(range_type: str = "today") -> dict:
     """
@@ -69,7 +110,24 @@ def get_event_counts(range_type: str = "today") -> dict:
     Geo-fencing, Occupancy/Queue/Wait-time monitoring, Distress gestures, 
     PPE violations, Fall detection, Suspicious motion, Tailgating, and SOS signals.
     """
-    return api_functions.get_event_counts(range_type)
+    kwargs = {
+        'range_type':range_type
+    }
+    key = generate_cache_key('get_event_counts',kwargs)
+
+    # 1️⃣ Check cache
+    cached = get_cached_data(key)
+    if cached is not None:
+        return cached
+    
+    result = toons.dumps(api_functions.get_event_counts(range_type))
+
+    try:
+        redis_client.set(key, result, ex=500)
+    except Exception:
+        pass
+
+    return result
 
 @mcp.tool()
 def get_vehicle_counts(range_type: str = "today") -> dict:
@@ -80,7 +138,24 @@ def get_vehicle_counts(range_type: str = "today") -> dict:
     This tool provides counts for specific vehicle categories:
     Bicycle, Bike, Auto, Car, Van, Bus, and Truck.
     """
-    return api_functions.get_vehicle_counts(range_type)
+    kwargs = {
+        'range_type':range_type
+    }
+    key = generate_cache_key('get_vehicle_counts',kwargs)
+
+    # 1️⃣ Check cache
+    cached = get_cached_data(key)
+    if cached is not None:
+        return cached
+    
+    result = toons.dumps(api_functions.get_vehicle_counts(range_type))
+
+    try:
+        redis_client.set(key, result, ex=500)
+    except Exception:
+        pass
+
+    return result
 
 @mcp.tool()
 def get_crowd_counts(range_type: str = "today") -> dict:
@@ -91,7 +166,24 @@ def get_crowd_counts(range_type: str = "today") -> dict:
     This tool provides counts for different crowd density scenarios, 
     specifically: Crowd III, Crowd IV, and Crowd V events.
     """
-    return api_functions.get_crowd_counts(range_type)
+    kwargs = {
+        'range_type':range_type
+    }
+    key = generate_cache_key('get_crowd_counts',kwargs)
+
+    # 1️⃣ Check cache
+    cached = get_cached_data(key)
+    if cached is not None:
+        return cached
+    
+    result = toons.dumps(api_functions.get_crowd_counts(range_type))
+
+    try:
+        redis_client.set(key, result, ex=500)
+    except Exception:
+        pass
+
+    return result
 
 @mcp.tool()
 def get_line_crossing_counts(range_type: str = "today") -> dict:
@@ -102,7 +194,24 @@ def get_line_crossing_counts(range_type: str = "today") -> dict:
     This tool provides detailed metrics for people movement including: 
     Walk In, Walk Out, Cross In, and Cross Out across different camera devices.
     """
-    return api_functions.get_line_crossing_counts(range_type)
+    kwargs = {
+        'range_type':range_type
+    }
+    key = generate_cache_key('get_line_crossing_counts',kwargs)
+
+    # 1️⃣ Check cache
+    cached = get_cached_data(key)
+    if cached is not None:
+        return cached
+    
+    result = toons.dumps(api_functions.get_line_crossing_counts(range_type))
+
+    try:
+        redis_client.set(key, result, ex=500)
+    except Exception:
+        pass
+
+    return result
 
 @mcp.tool()
 def get_vehicle_line_crossing_counts(range_type: str = "today") -> dict:
@@ -114,24 +223,24 @@ def get_vehicle_line_crossing_counts(range_type: str = "today") -> dict:
     points like HO-CAM-02 Entrance, HO-CAM-03 Entrance, and PARKING OUT HO Exit.
     Use this when the user asks for 'entrance' or 'exit' counts.
     """
-    return api_functions.get_vehicle_line_crossing_counts(range_type)
+    kwargs = {
+        'range_type':range_type
+    }
+    key = generate_cache_key('get_vehicle_line_crossing_counts',kwargs)
 
-# @mcp.tool()
-# def generate_heatmap(start_date: str, end_date: str) -> dict:
-#     """
-#     Generates a heatmap image (base64) for a specific date-time range.
+    # 1️⃣ Check cache
+    cached = get_cached_data(key)
+    if cached is not None:
+        return cached
     
-#     IMPORTANT: If you are unsure of the current date, ALWAYS call 'get_current_time' first.
-#     You can use natural language like 'today 9am' or ISO strings.
-#     Times are assumed to be in IST (+5:30) unless specified otherwise.
-#     """,
-#     # Normalize inputs to UTC ISO strings before calling the API
-#     print(start_date,end_date)
-#     utc_start = normalize_to_utc(start_date)
-#     utc_end = normalize_to_utc(end_date)
-    
-#     print(f"Generating heatmap: {start_date} -> {utc_start} to {end_date} -> {utc_end}")
-#     return api_functions.generate_heatmap(utc_start, utc_end)
+    result = toons.dumps(api_functions.get_vehicle_line_crossing_counts(range_type))
+
+    try:
+        redis_client.set(key, result, ex=500)
+    except Exception:
+        pass
+
+    return result
 
 @mcp.tool()
 def get_current_time() -> dict:
@@ -146,11 +255,11 @@ def get_current_time() -> dict:
     now_ist = datetime.now(ist)
     now_utc = datetime.now(pytz.UTC)
     
-    return {
+    return toons.dumps({
         "local_time": now_ist.strftime('%Y-%m-%d %H:%M:%S %Z%z'),
         "utc_time": now_utc.strftime('%Y-%m-%dT%H:%M:%SZ'),
         "timezone": "Asia/Kolkata"
-    }
+    })
 
 @mcp.tool()
 def get_event_types(limit: int = 20, offset: int = 0) -> dict:
@@ -158,7 +267,25 @@ def get_event_types(limit: int = 20, offset: int = 0) -> dict:
     Retrieves the list of supported event types and active detection status.
     Use this to see what categories of events the system can monitor.
     """
-    return api_functions.get_event_types(limit, offset)
+    kwargs = {
+        'limit':limit,
+        'offset':offset
+    }
+    key = generate_cache_key('get_event_types',kwargs)
+
+    # 1️⃣ Check cache
+    cached = get_cached_data(key)
+    if cached is not None:
+        return cached
+    
+    result = toons.dumps(api_functions.get_event_types(limit, offset))
+
+    try:
+        redis_client.set(key, result, ex=2400)
+    except Exception:
+        pass
+
+    return result
 
 
 def convert_utc_to_ist_readable(utc_str: str) -> str:
@@ -229,11 +356,27 @@ def get_attendances_advanced(
         branch_id (int, optional): Specific Branch ID filter (Default: None).
         staff_type (str, optional): Filter by staff category, e.g., 'shell_staff' (Default: None).
     """
-
     # ✅ Do not normalize dates; the API expects raw YYYY-MM-DD strings.
     # The agent provides them properly as instructed.
+    kwargs = {
+        'start_date':start_date,
+        'end_date':end_date,
+        'limit':limit,
+        'offset':offset,
+        'search':search,
+        'staff_id':staff_id,
+        'branch_id':branch_id,
+        'staff_type':staff_type
 
-    return api_functions.get_attendances_advanced(
+    }
+    key = generate_cache_key('get_attendances_advanced',kwargs)
+
+    # 1️⃣ Check cache
+    cached = get_cached_data(key)
+    if cached is not None:
+        return cached
+
+    result = toons.dumps(api_functions.get_attendances_advanced(
         limit=limit,
         offset=offset,
         search=search or None,
@@ -242,7 +385,12 @@ def get_attendances_advanced(
         start_date=start_date,
         end_date=end_date or None,
         staff_type=staff_type or None
-    )
+    ))
+    try:
+        redis_client.set(key, result, ex=500)
+    except Exception:
+        pass
+    return result
 
 @mcp.tool()
 def get_attendance_logs(attendance_record_id: int) -> dict:
@@ -258,6 +406,17 @@ def get_attendance_logs(attendance_record_id: int) -> dict:
     - Safe user data
     - Full image URLs
     """
+    kwargs = {
+        'attendance_record_id':attendance_record_id
+    }
+
+    key = generate_cache_key('get_attendance_logs',kwargs)
+
+    # 1️⃣ Check cache
+    cached = get_cached_data(key)
+    if cached is not None:
+        return cached
+
     data = api_functions.get_attendance_logs(attendance_record_id)
 
     # 🔴 Remove unwanted top-level fields
@@ -297,7 +456,13 @@ def get_attendance_logs(attendance_record_id: int) -> dict:
             "last_name": data["userData"].get("last_name"),
         }
 
-    return data
+    result = toons.dumps(data)
+    try:
+        redis_client.set(key, result, ex=500)
+    except Exception:
+        pass
+
+    return result
 
 
 @mcp.tool()
@@ -318,7 +483,25 @@ def get_staffs(limit: int = 10, offset: int = 0, search: Optional[str] = None) -
         offset (int): Pagination offset (Default: 0).
         search (str, optional): Search keyword for staff name (Default: None).
     """
-    return api_functions.get_staffs(limit, offset, search if search else None)
+    kwargs = {
+        'limit':limit,
+        'offset':offset,
+        'search':search
+    }
+    key = generate_cache_key('get_staffs',kwargs)
+
+    # 1️⃣ Check cache
+    cached = get_cached_data(key)
+    if cached is not None:
+        return cached
+
+    result = toons.dumps(api_functions.get_staffs(limit, offset, search if search else None))
+    try:
+        redis_client.set(key, result, ex=600)
+    except Exception:
+        pass
+
+    return result
 
 
 @mcp.tool()
@@ -337,7 +520,25 @@ def get_camera_list(limit: int = 10, offset: int = 0, search: Optional[str] = No
         offset (int): Pagination offset (Default: 0).
         search (str, optional): Search keyword for spot_name (Default: None).
     """
-    return api_functions.get_devices(limit, offset, search)
+    kwargs = {
+        'limit':limit,
+        'offset':offset,
+        'search':search
+    }
+    key = generate_cache_key('get_camera_list',kwargs)
+
+    # 1️⃣ Check cache
+    cached = get_cached_data(key)
+    if cached is not None:
+        return cached
+
+    result = toons.dumps(api_functions.get_devices(limit, offset, search))
+    try:
+        redis_client.set(key, result, ex=600)
+    except Exception:
+        pass
+
+    return result
 
 @mcp.tool()
 def get_detailed_events(
@@ -367,7 +568,23 @@ def get_detailed_events(
         spot_name (str, optional): Filter by specific camera (e.g., "HO-CAM-06").
         status (bool, optional): Event status filter.
     """
-    return api_functions.get_detailed_events(
+    kwargs = {
+        'start_date':start_date,
+        'end_date':end_date,
+        'limit':limit,
+        'offset':offset,
+        'event_type':event_type,
+        'spot_name':spot_name,
+        'status':status
+    }
+    key = generate_cache_key('get_detailed_events',kwargs)
+
+    # 1️⃣ Check cache
+    cached = get_cached_data(key)
+    if cached is not None:
+        return cached
+
+    result = toons.dumps(api_functions.get_detailed_events(
         start_date=start_date,
         end_date=end_date,
         limit=limit,
@@ -375,7 +592,14 @@ def get_detailed_events(
         event_type=event_type,
         spot_name=spot_name,
         status=status
-    )
+    ))
+
+    try:
+        redis_client.set(key, result, ex=500)
+    except Exception:
+        pass
+
+    return result
 
 if __name__ == "__main__":
     import os
@@ -387,6 +611,29 @@ if __name__ == "__main__":
     if transport == "sse":
         print(f"Starting MCP SSE server on port {port}...")
         mcp.run(transport="sse")
+    elif transport in ("http", "streamable-http"):
+        print(f"Starting MCP Streamable HTTP server on port {port}...")
+        mcp.run(transport="streamable-http")
     else:
         # Default to stdio for local agent execution
         mcp.run(transport="stdio")
+
+
+
+
+# @mcp.tool()
+# def generate_heatmap(start_date: str, end_date: str) -> dict:
+#     """
+#     Generates a heatmap image (base64) for a specific date-time range.
+    
+#     IMPORTANT: If you are unsure of the current date, ALWAYS call 'get_current_time' first.
+#     You can use natural language like 'today 9am' or ISO strings.
+#     Times are assumed to be in IST (+5:30) unless specified otherwise.
+#     """,
+#     # Normalize inputs to UTC ISO strings before calling the API
+#     print(start_date,end_date)
+#     utc_start = normalize_to_utc(start_date)
+#     utc_end = normalize_to_utc(end_date)
+    
+#     print(f"Generating heatmap: {start_date} -> {utc_start} to {end_date} -> {utc_end}")
+#     return api_functions.generate_heatmap(utc_start, utc_end)

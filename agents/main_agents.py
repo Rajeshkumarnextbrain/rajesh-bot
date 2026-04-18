@@ -21,9 +21,9 @@ async def initize_mcp():
                 "transport": "sse",
                 "url": os.getenv("ATTENDANCE_MCP_URL", "http://localhost:8000/sse"),
                 "timeout": 120.0,
-                } 
             }
-        )
+        }
+    )
 
     tools = await mcp_client.get_tools()
 
@@ -36,6 +36,7 @@ temperature = os.getenv("TEMPERATURE", 0.5)
 primary_model = ChatOpenAI(
     model=primary_model_name,
     temperature=temperature,
+    max_retries=5,
 )
 """
 

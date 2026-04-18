@@ -8,55 +8,137 @@ load_dotenv()
 
 def get_event_counts(range_type: str = "today") -> dict:
     """
-    Retrieves event counts for a specific time range from 'multi-events-count' endpoint.
+    Retrieves event counts, removes zero values, and returns
+    a token-efficient compressed structure for LLM usage.
     """
     range_mapping = {"today": 1, "week": 2, "month": 3, "year": 4}
     if range_type.lower() not in range_mapping:
-        return {"error": f"Invalid range_type '{range_type}'. Valid options: {list(range_mapping.keys())}"}
+        return {
+            "error": f"Invalid range_type '{range_type}'. Valid options: {list(range_mapping.keys())}"
+        }
+
     type_id = range_mapping[range_type.lower()]
-    
+
     url = f"{auth.base_url}/events/multi-events-count"
     headers = auth.get_auth_header()
     headers["accept"] = "application/json"
-    
-    response = requests.get(url, headers=headers, params={"type": type_id})
-    
-    # Check for token expiration (401 Unauthorized)
-    if response.status_code == 401 and auth.email and auth.password:
-        print("Token expired. Re-authenticating...")
-        auth.login(auth.email, auth.password)
-        headers = auth.get_auth_header()  # Get new token in header
-        headers["accept"] = "application/json"
-        response = requests.get(url, headers=headers, params={"type": type_id})
-        
-    response.raise_for_status()
-    return response.json()
 
-def get_vehicle_counts(range_type: str = "today") -> dict:
-    """
-    Retrieves vehicle counts for a specific time range from 'multi-vehicles-count' endpoint.
-    """
-    range_mapping = {"today": 1, "week": 2, "month": 3, "year": 4}
-    if range_type.lower() not in range_mapping:
-        return {"error": f"Invalid range_type '{range_type}'. Valid options: {list(range_mapping.keys())}"}
-    type_id = range_mapping[range_type.lower()]
-    
-    url = f"{auth.base_url}/vehicles/multi-vehicles-count"
-    headers = auth.get_auth_header()
-    headers["accept"] = "application/json"
-    
     response = requests.get(url, headers=headers, params={"type": type_id})
-    
-    # Check for token expiration (401 Unauthorized)
+
+    # 🔁 Retry if token expired
     if response.status_code == 401 and auth.email and auth.password:
-        print("Token expired. Re-authenticating...")
         auth.login(auth.email, auth.password)
         headers = auth.get_auth_header()
         headers["accept"] = "application/json"
         response = requests.get(url, headers=headers, params={"type": type_id})
-        
+
     response.raise_for_status()
-    return response.json()
+    raw_data = response.json()
+
+    # ---------------- STEP 1: REMOVE ZERO VALUES ---------------- #
+    cleaned_blocks = []
+
+    for block in raw_data.get("countsByData", []):
+        filtered = []
+
+        for item in block.get("data", []):
+            count = item.get("count", 0)
+            if count > 0:
+                filtered.append({
+                    "event_type": item.get("eventType"),
+                    "count": count
+                })
+
+        if filtered:
+            cleaned_blocks.append({
+                "time": block.get("name"),
+                "events": filtered
+            })
+
+    # ---------------- STEP 2: COMPRESS FOR LLM ---------------- #
+    compressed_data = {}
+
+    for block in cleaned_blocks:
+        time = block["time"]
+        events = block["events"]
+
+        compressed_data[time] = [
+            [e["event_type"], e["count"]]
+            for e in events
+        ]
+
+    # ---------------- FINAL OUTPUT ---------------- #
+    return {
+        "total": int(raw_data.get("totalCount", 0)),
+        "data": compressed_data
+    }
+
+def get_vehicle_counts(range_type: str = "today") -> dict:
+    """
+    Retrieves vehicle counts, removes zero values, and returns a
+    token-efficient compressed structure for LLM usage.
+    """
+    range_mapping = {"today": 1, "week": 2, "month": 3, "year": 4}
+    if range_type.lower() not in range_mapping:
+        return {
+            "error": f"Invalid range_type '{range_type}'. Valid options: {list(range_mapping.keys())}"
+        }
+
+    type_id = range_mapping[range_type.lower()]
+
+    url = f"{auth.base_url}/vehicles/multi-vehicles-count"
+    headers = auth.get_auth_header()
+    headers["accept"] = "application/json"
+
+    response = requests.get(url, headers=headers, params={"type": type_id})
+
+    # 🔁 Retry if token expired
+    if response.status_code == 401 and auth.email and auth.password:
+        auth.login(auth.email, auth.password)
+        headers = auth.get_auth_header()
+        headers["accept"] = "application/json"
+        response = requests.get(url, headers=headers, params={"type": type_id})
+
+    response.raise_for_status()
+    raw_data = response.json()
+
+    # ---------------- STEP 1: REMOVE ZERO VALUES ---------------- #
+    cleaned_blocks = []
+
+    for block in raw_data.get("countsByData", []):
+        filtered = []
+
+        for item in block.get("data", []):
+            count = item.get("count", 0)
+            if count > 0:
+                filtered.append({
+                    "vehicle_type": item.get("vehicleType"),
+                    "count": count
+                })
+
+        if filtered:
+            cleaned_blocks.append({
+                "time": block.get("name"),
+                "vehicles": filtered
+            })
+
+    # ---------------- STEP 2: COMPRESS FOR LLM ---------------- #
+    compressed_data = {}
+
+    for block in cleaned_blocks:
+        time = block["time"]
+        vehicles = block["vehicles"]
+
+        compressed_data[time] = [
+            [v["vehicle_type"], v["count"]]
+            for v in vehicles
+        ]
+
+    # ---------------- FINAL OUTPUT ---------------- #
+    return {
+        "total": int(raw_data.get("totalCount", 0)),
+        "data": compressed_data
+    }
 
 def get_crowd_counts(range_type: str = "today") -> dict:
     """
@@ -440,7 +522,8 @@ def get_devices(limit: int = 10, offset: int = 0, search: str = None) -> dict:
 
     response.raise_for_status()
     data = response.json()
-
+    # 🔥 REMOVE HEAVY FIELD
+    data.pop("Active_Data", None)
     # ✅ Keep only required fields and parse event_type names
     cleaned_data = []
     for device in data.get("data", []):
@@ -466,31 +549,48 @@ def get_devices(limit: int = 10, offset: int = 0, search: str = None) -> dict:
     return data
 
 def get_detailed_events(
-    start_date: str, 
-    end_date: str, 
-    limit: int = 10, 
-    offset: int = 0, 
-    event_type: str = None, 
-    spot_name: str = None, 
+    start_date: str,
+    end_date: str,
+    limit: int = 10,
+    offset: int = 0,
+    event_type: str = None,
+    spot_name: str = None,
     status: bool = None
 ) -> dict:
     """
-    Retrieves detailed event logs based on filters.
-    
-    Args:
-        start_date (str): Start date in YYYY-MM-DD (MANDATORY).
-        end_date (str): End date in YYYY-MM-DD (MANDATORY).
-        limit (int): Number of records.
-        offset (int): Pagination offset.
-        event_type (str, optional): Filter by event type (e.g., "Intrusion detection").
-        spot_name (str, optional): Filter by camera spot name.
-        status (bool, optional): Filter by event status.
-        
-    Returns:
-        dict: Event data
+    Retrieves detailed event logs based on filters. 
+    Args: 
+        start_date (str): Start date in YYYY-MM-DD (MANDATORY). 
+        end_date (str): End date in YYYY-MM-DD (MANDATORY). 
+        limit (int): Number of records. 
+        offset (int): Pagination offset. 
+        event_type (str, optional): Filter by event type (e.g., "Intrusion detection"). 
+        spot_name (str, optional): Filter by camera spot name. status (bool, optional): 
+        Filter by event status. 
+    Returns: dict: Event data
     """
-    import json
-    
+
+
+    # 🔥 Mapping: Event Type → Relevant Fields
+    EVENT_FIELD_MAP = {
+        "Human detection": ["age", "gender"],
+        "Intrusion detection": ["intrusion_type"],
+        "Crowd detection": ["crowd_count"],
+        "Occupancy monitoring": ["crowd_count"],
+        "Queue Detection": ["crowd_count"],
+        "Wait Time Monitoring": ["actual_waiting_time"],
+        "PPE violation detection": ["violation"],
+        "Zone restriction detection": ["staff_id"],
+        "Unproductivity detection": ["staff_id"],
+    }
+
+    # 🔥 Optional field renaming
+    FIELD_RENAME = {
+        ("Occupancy monitoring", "crowd_count"): "current_occupancy",
+        ("Queue Detection", "crowd_count"): "queue_length",
+    }
+
+    # ---------------- API CALL ---------------- #
     filter_params = {
         "offset": offset,
         "limit": limit,
@@ -501,11 +601,11 @@ def get_detailed_events(
     url = f"{auth.base_url}/events"
     headers = auth.get_auth_header()
     headers["accept"] = "application/json"
-    
+
     params = {
         "filter": json.dumps(filter_params)
     }
-    
+
     if event_type:
         params["filterValues[event_type]"] = event_type
     if start_date:
@@ -519,6 +619,7 @@ def get_detailed_events(
 
     response = requests.get(url, headers=headers, params=params)
 
+    # 🔁 Retry on auth failure
     if response.status_code == 401 and auth.email and auth.password:
         auth.login(auth.email, auth.password)
         headers = auth.get_auth_header()
@@ -527,13 +628,46 @@ def get_detailed_events(
 
     response.raise_for_status()
     data = response.json()
-    
+
+    # ---------------- CLEANING LOGIC ---------------- #
+    cleaned_events = []
+
     for event in data.get("data", []):
-        if event.get("image"):
-            event["image"] = f"{auth.base_url}{event['image']}"
-        event["date"] = convert_utc_to_ist_readable(event.get("date"))
-        event["created_at"] = convert_utc_to_ist_readable(event.get("created_at"))
-        
+        event_type_value = (event.get("event_type") or "").strip()
+
+        # ✅ Base/common fields
+        base_fields = {
+            "id": event.get("id"),
+            "event_type": event_type_value,
+            "spot_name": (event.get("spot_name") or "").strip(),
+            "date": convert_utc_to_ist_readable(event.get("date")),
+            "created_at": convert_utc_to_ist_readable(event.get("created_at")),
+            "image": f"{auth.base_url}{event['image']}" if event.get("image") else None,
+        }
+
+        # ✅ Get allowed fields
+        allowed_fields = EVENT_FIELD_MAP.get(event_type_value, [])
+
+        extra_fields = {}
+
+        for field in allowed_fields:
+            value = event.get(field)
+
+            # ❌ Skip useless values
+            if value in [None, 0, "", "Null"]:
+                continue
+
+            # ✅ Rename if needed
+            new_key = FIELD_RENAME.get((event_type_value, field), field)
+            extra_fields[new_key] = value
+
+        # 🔥 Final cleaned event
+        cleaned_event = {**base_fields, **extra_fields}
+
+        cleaned_events.append(cleaned_event)
+
+    # Replace original data
+    data["data"] = cleaned_events
     return data
 
 if __name__ == "__main__":

@@ -61,7 +61,7 @@ async def run_agent_api_stream(query: str, session_id: str):
     seen_tools = set()
     full_final_answer = ""
 
-    messages = {"messages": chat_history + [HumanMessage(content=query)]}
+    messages = {"messages": chat_history[-10:] + [HumanMessage(content=query)]}
 
     async for chunk in agent.astream(
         messages,
