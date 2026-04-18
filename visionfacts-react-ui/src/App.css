@@ -718,7 +718,12 @@ body {
 /* ================================================================
    PROSE — Markdown
 ================================================================ */
-.prose { color: var(--text-primary); font-size: 0.8rem; line-height: 1.72; }
+.prose { 
+  color: var(--text-primary); 
+  font-size: 0.8rem; 
+  line-height: 1.72; 
+  width: 100%;
+}
 
 .prose h1, .prose h2, .prose h3 {
   color: var(--text-primary);
@@ -749,22 +754,23 @@ body {
 
 /* ── Markdown Table Styles ── */
 .prose table {
-  width: 100%;
-  display: block;
-  overflow-x: auto;
+  width: auto;
+  min-width: 280px;
+  max-width: 100%;
   border-collapse: separate;
   border-spacing: 0;
-  margin: 1.25rem 0;
-  border-radius: 0.75rem;
-  border: 1px solid var(--border-main);
-  box-shadow: var(--s1);
+  margin: 0.85rem 0;
+  border-radius: 0.85rem;
+  border: 1px solid var(--border-strong);
+  box-shadow: var(--s2);
+  overflow: hidden;
+  background: var(--bg-surface);
 }
 .prose th, .prose td {
   padding: 0.85rem 1rem;
   text-align: left;
   border-bottom: 1px solid var(--border-main);
   font-size: 0.78rem;
-  white-space: nowrap;
 }
 .prose th {
   background-color: var(--bg-surface-alt);
@@ -786,12 +792,20 @@ body {
 }
 
 /* ── CCTV Image thumbnail ── */
+.cctv-preview-container {
+  margin: 1.2rem 0;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start; /* Keep left aligned within the list/text */
+}
+
 .cctv-img-wrapper {
-  margin: 0.65rem 0 0;
-  border-radius: 0.65rem;
+  border-radius: 0.65rem 0.65rem 0 0;
   border: 1px solid var(--border-main);
   overflow: hidden;
-  background: var(--bg-surface);
+  background: #000;
+  max-width: 28rem;
+  width: 100%;
   transition: border-color var(--tf), transform 0.2s cubic-bezier(0.2, 0, 0.2, 1), box-shadow var(--tf);
   cursor: pointer;
   position: relative;
@@ -807,8 +821,8 @@ body {
 }
 .cctv-img-wrapper img {
   width: 100%;
-  max-height: 17rem;
-  object-fit: contain;
+  height: 100%;
+  object-fit: cover;
   display: block;
 }
 
@@ -891,7 +905,7 @@ body {
 .cctv-view-btn:hover { transform: scale(1.05); box-shadow: 0 6px 24px var(--acc-glow); }
 
 .cctv-img-caption {
-  font-size: 0.57rem;
+  font-size: 0.65rem;
   color: var(--text-muted);
   font-style: italic;
   padding: 0 0.25rem;
@@ -901,15 +915,20 @@ body {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  margin-top: 0.25rem;
-  padding: 0 0.25rem;
+  padding: 0.5rem 0.75rem;
+  background: var(--bg-surface-alt);
+  border-radius: 0 0 0.65rem 0.65rem;
+  border: 1px solid var(--border-main);
+  border-top: none;
+  max-width: 28rem;
+  width: 100%;
 }
 
 .cctv-direct-link {
-  font-size: 0.57rem;
+  font-size: 0.65rem;
   color: var(--acc1);
   text-decoration: none;
-  font-weight: 500;
+  font-weight: 600;
   transition: opacity var(--tf);
 }
 .cctv-direct-link:hover {

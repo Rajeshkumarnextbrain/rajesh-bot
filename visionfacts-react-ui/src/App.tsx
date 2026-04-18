@@ -150,7 +150,7 @@ function isImageUrl(href?: string): boolean {
 /* ── Markdown component map ── */
 function makeMarkdownComponents(onImageClick: (src: string) => void) {
   const ImagePreview = ({ src, alt }: { src: string; alt?: string }) => (
-    <div style={{ marginTop: '0.6rem', marginBottom: '0.25rem' }}>
+    <div className="cctv-preview-container">
       <CCTVImage src={src} onOpen={onImageClick} />
       <div className="cctv-img-footer">
         <p className="cctv-img-caption">Click image to open preview</p>
