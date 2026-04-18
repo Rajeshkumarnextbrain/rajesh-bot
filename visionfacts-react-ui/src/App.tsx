@@ -186,7 +186,7 @@ function App() {
   const [input, setInput] = useState('');
   const [isTyping, setIsTyping] = useState(false);
   const [isAnimatingText, setIsAnimatingText] = useState(false);
-  const [activeProgress, setActiveProgress] = useState<{ type: string; content: string } | null>(null);
+  const [activeProgress, setActiveProgress] = useState<{ status?: string; task?: string; tool?: string } | null>(null);
   const [typingText, setTypingText] = useState('');
   const [previewImage, setPreviewImage] = useState<string | null>(null);
   const [darkMode, setDarkMode] = useState(true); // default to dark
@@ -270,7 +270,7 @@ function App() {
     setMessages((prev) => [...prev, userMsg]);
     setInput('');
     setIsTyping(true);
-    setActiveProgress({ type: 'status', content: '🤖 Initializing...' });
+    setActiveProgress({ status: '🤖 Initializing...' });
 
     if (abortControllerRef.current) {
       abortControllerRef.current.abort();
@@ -304,11 +304,11 @@ function App() {
             const data: UpdateChunk = JSON.parse(line);
 
             if (data.type === 'status') {
-              setActiveProgress({ type: 'status', content: data.content });
+              setActiveProgress(prev => ({ ...prev, status: data.content }));
             } else if (data.type === 'task') {
-              setActiveProgress({ type: 'task', content: data.content });
+              setActiveProgress(prev => ({ ...prev, task: data.content }));
             } else if (data.type === 'tool') {
-              setActiveProgress({ type: 'tool', content: data.content });
+              setActiveProgress(prev => ({ ...prev, tool: data.content }));
             } else if (data.type === 'answer') {
               assistantMsgContent = data.content;
               setIsAnimatingText(true);
@@ -358,7 +358,11 @@ function App() {
       setMessages((prev) => [...prev, errorMsg]);
       setIsTyping(false);
     } finally {
-      setActiveProgress(null);
+      // Only clear if we're not currently animating the final answer
+      if (!isAnimatingText) {
+        setActiveProgress(null);
+        setIsTyping(false);
+      }
     }
   };
 
@@ -549,33 +553,54 @@ function App() {
                   <Bot size={14} />
                 </div>
                 <div className="msg-content" style={{ width: '100%', maxWidth: '18rem' }}>
-                  <div className="msg-bubble bot-bubble" style={{ padding: '1rem 1.2rem', width: '100%' }}>
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.7rem' }}>
+                  <div className="msg-bubble bot-bubble" style={{ padding: '1rem 1.2rem', width: '100%', minWidth: '16rem' }}>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.65rem' }}>
+                      {/* Always show skeleton while thinking */}
                       <div className="premium-skeleton" style={{ height: '0.55rem', borderRadius: '4px', width: '92%' }} />
                       <div className="premium-skeleton" style={{ height: '0.55rem', borderRadius: '4px', width: '100%' }} />
                       <div className="premium-skeleton" style={{ height: '0.55rem', borderRadius: '4px', width: '60%' }} />
                     </div>
                   </div>
-                  {activeProgress && activeProgress.content !== '🤖 Initializing...' && (
-                    <motion.div 
-                      key={activeProgress.content}
-                      initial={{ opacity: 0 }} 
-                      animate={{ opacity: 1 }}
-                      style={{ fontSize: '0.62rem', color: 'var(--text-muted)', display: 'flex', alignItems: 'flex-start', gap: '0.35rem', marginTop: '0.2rem', paddingLeft: '0.3rem', fontStyle: 'italic' }}
-                    >
-                      <Cpu size={11} className="animate-pulse" style={{ marginTop: '0.1rem', flexShrink: 0 }} />
-                      <span style={{
-                        display: '-webkit-box',
-                        WebkitLineClamp: 5,
-                        WebkitBoxOrient: 'vertical',
-                        overflow: 'hidden',
-                        textOverflow: 'ellipsis',
-                        wordBreak: 'break-word',
-                        whiteSpace: 'pre-wrap'
-                      }}>
-                        {activeProgress.content.replace('🤖 ', '')}
-                      </span>
-                    </motion.div>
+
+                  {/* Render active progress steps BELOW the bubble in the highlighted area */}
+                  {activeProgress && (
+                    <div className="thinking-steps-outer" style={{ marginTop: '0.75rem', paddingLeft: '0.5rem', display: 'flex', flexDirection: 'column', gap: '0.55rem' }}>
+                      <AnimatePresence mode="popLayout">
+                        {activeProgress.status && (
+                          <motion.div 
+                            key="status"
+                            initial={{ opacity: 0, x: -8 }} 
+                            animate={{ opacity: 1, x: 0 }}
+                            className="thinking-step-mini status"
+                          >
+                            <Activity size={13} className="step-icon pulse" />
+                            <span>{activeProgress.status}</span>
+                          </motion.div>
+                        )}
+                        {activeProgress.task && (
+                          <motion.div 
+                            key="task"
+                            initial={{ opacity: 0, x: -8 }} 
+                            animate={{ opacity: 1, x: 0 }}
+                            className="thinking-step-mini task"
+                          >
+                            <Info size={13} className="step-icon" />
+                            <span>{activeProgress.task}</span>
+                          </motion.div>
+                        )}
+                        {activeProgress.tool && (
+                          <motion.div 
+                            key="tool"
+                            initial={{ opacity: 0, x: -8 }} 
+                            animate={{ opacity: 1, x: 0 }}
+                            className="thinking-step-mini tool"
+                          >
+                            <Cpu size={13} className="step-icon spin-slow" />
+                            <span>{activeProgress.tool}</span>
+                          </motion.div>
+                        )}
+                      </AnimatePresence>
+                    </div>
                   )}
                 </div>
               </motion.div>

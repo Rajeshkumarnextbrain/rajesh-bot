@@ -577,53 +577,50 @@ body {
   padding: 0 0.22rem;
 }
 
-/* ── Thinking indicator ── */
-.thinking-row {
+/* ── Thinking indicator (Inside bubble) ── */
+.thinking-steps-inner {
   display: flex;
+  flex-direction: column;
   gap: 0.65rem;
-  align-self: flex-start;
-  width: 100%;
 }
 
-.progress-card {
-  padding: 0.65rem 0.9rem;
-  border-radius: 0.75rem;
-  border: 1px solid;
-  font-size: 0.73rem;
-  font-weight: 500;
+.thinking-step-mini {
   display: flex;
   align-items: flex-start;
-  gap: 0.55rem;
-  max-width: 28rem;
-  animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+  gap: 0.6rem;
+  font-size: 0.72rem;
+  font-weight: 500;
+  line-height: 1.4;
+  color: var(--text-primary);
+  opacity: 0.9;
 }
 
-.progress-card span {
-  display: -webkit-box;
-  -webkit-line-clamp: 5;
-  -webkit-box-orient: vertical;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  word-break: break-word;
-  white-space: pre-wrap;
-  margin-top: 0.1rem;
+.thinking-step-mini span {
+  flex: 1;
 }
 
-.progress-card svg {
-  margin-top: 0.2rem;
+.thinking-step-mini.status { color: var(--acc1); }
+.thinking-step-mini.task   { color: var(--cyan); }
+.thinking-step-mini.tool   { color: var(--text-secondary); }
+
+.step-icon {
+  margin-top: 0.15rem;
+  flex-shrink: 0;
 }
 
-.progress-card.status {
-  background: var(--acc-subtle);
-  border-color: rgba(110,54,228,0.2);
-  color: var(--acc1);
+/* Animations */
+@keyframes pulse {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.6; transform: scale(0.95); }
 }
 
-.progress-card.task {
-  background: var(--cyan-sub);
-  border-color: rgba(8,145,178,0.2);
-  color: var(--cyan);
+@keyframes spin-slow {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
 }
+
+.pulse { animation: pulse 2s ease-in-out infinite; }
+.spin-slow { animation: spin-slow 8s linear infinite; }
 
 /* ── Input Area ── */
 .chat-input-area {
