@@ -55,7 +55,7 @@ agent = create_deep_agent(
 
 TOOL_MESSAGES = {
     "get_current_time": "🕒 Getting current system time...",
-    "get_attendances_advanced": "📊 Fetching today's attendance records...",
+    "get_attendances_advanced": "📊 Fetching attendance records...",
     "get_attendance_logs": "📊 Fetching attendance logs...",
     "get_event_counts": "📈 Analyzing event activity...",
     "get_line_crossing_counts": "🚶 Checking line crossing activity...",
