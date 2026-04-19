@@ -4,7 +4,7 @@ from dotenv import load_dotenv
 import yaml
 
 from langchain_mcp_adapters.client import MultiServerMCPClient
-from langchain_openai import ChatOpenAI
+from utils.model_utils import get_chat_model
 from langchain.agents import create_agent
 
 
@@ -33,10 +33,9 @@ all_tools = asyncio.run(initize_mcp())
 
 primary_model_name = os.getenv("PRIMARY_MODEL", "gpt-5.4-nano-2026-03-17")
 temperature = os.getenv("TEMPERATURE", 0.5)
-primary_model = ChatOpenAI(
-    model=primary_model_name,
-    temperature=temperature,
-    max_retries=5,
+primary_model = get_chat_model(
+    model_name=primary_model_name,
+    temperature=float(temperature),
 )
 """
 

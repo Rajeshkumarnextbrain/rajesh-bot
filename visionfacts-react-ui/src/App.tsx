@@ -18,9 +18,14 @@ import {
   Moon,
   ChevronDown,
   Search,
+  Copy,
+  Check,
+  Download,
 } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
+import ExcelJS from 'exceljs';
+import { saveAs } from 'file-saver';
 import './App.css';
 
 interface Message {
@@ -169,6 +174,103 @@ function makeMarkdownComponents(onImageClick: (src: string) => void) {
     </div>
   );
 
+  const MarkdownTable: React.FC<any> = ({ children, ...props }) => {
+    const tableRef = useRef<HTMLTableElement>(null);
+
+    const exportToExcel = async () => {
+      if (!tableRef.current) return;
+      
+      const workbook = new ExcelJS.Workbook();
+      const worksheet = workbook.addWorksheet('CCTV Report');
+
+      const rows = Array.from(tableRef.current.querySelectorAll('tr'));
+      const headerRow = rows[0];
+      const dataRows = rows.slice(1);
+
+      // Setup Headers
+      const headers = Array.from(headerRow.querySelectorAll('th')).map(th => th.textContent || '');
+      const header = worksheet.addRow(headers);
+      
+      header.eachCell((cell) => {
+        cell.fill = {
+          type: 'pattern',
+          pattern: 'solid',
+          fgColor: { argb: 'FF6E36E4' } // Brand Purple
+        };
+        cell.font = { color: { argb: 'FFFFFFFF' }, bold: true };
+        cell.alignment = { vertical: 'middle', horizontal: 'center' };
+      });
+
+      // Process Rows
+      for (let i = 0; i < dataRows.length; i++) {
+        const rowData = Array.from(dataRows[i].querySelectorAll('td'));
+        const values = rowData.map(td => {
+          const img = td.querySelector('img');
+          const directLink = td.querySelector('.cctv-direct-link') as HTMLAnchorElement;
+          if (img || directLink) return ''; // Leave empty for image placement
+          return td.textContent?.replace(/ Direct Link/g, '').trim() || '';
+        });
+
+        const newRow = worksheet.addRow(values);
+        newRow.height = 80; // High enough for thumbnails
+        newRow.eachCell(cell => {
+          cell.alignment = { vertical: 'middle', horizontal: 'left', wrapText: true };
+        });
+
+        // Handle Images
+        for (let j = 0; j < rowData.length; j++) {
+          const imgElement = rowData[j].querySelector('img');
+          const directLink = rowData[j].querySelector('.cctv-direct-link') as HTMLAnchorElement;
+          const imgSrc = imgElement?.src || directLink?.href;
+
+          if (imgSrc) {
+            try {
+              const response = await fetch(imgSrc);
+              const buffer = await response.arrayBuffer();
+              
+              const imageId = workbook.addImage({
+                buffer: buffer,
+                extension: imgSrc.split('.').pop()?.split('?')[0] as 'jpeg' | 'png' | 'gif' || 'png',
+              });
+
+              worksheet.addImage(imageId, {
+                tl: { col: j, row: i + 1 },
+                ext: { width: 100, height: 100 },
+                editAs: 'oneCell'
+              });
+            } catch (error) {
+              console.error('Error embedding image in Excel:', error);
+              newRow.getCell(j + 1).value = imgSrc; // Fallback to URL
+            }
+          }
+        }
+      }
+
+      // Column widths
+      worksheet.columns.forEach(column => {
+        column.width = 25;
+      });
+
+      const buffer = await workbook.xlsx.writeBuffer();
+      const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+      saveAs(blob, `visionfacts_report_${Date.now()}.xlsx`);
+    };
+
+    return (
+      <div className="markdown-table-wrapper-container">
+        <div className="table-actions-top">
+          <button className="btn-export-csv" onClick={exportToExcel} title="Export to Excel">
+            <Download size={12} />
+            Excel
+          </button>
+        </div>
+        <div className="markdown-table-wrapper">
+          <table ref={tableRef} {...props}>{children}</table>
+        </div>
+      </div>
+    );
+  };
+
   return {
     a: ({ node, ...props }: any) => {
       if (isImageUrl(props.href)) {
@@ -179,11 +281,7 @@ function makeMarkdownComponents(onImageClick: (src: string) => void) {
     img: ({ node, ...props }: any) => {
       return <ImagePreview src={props.src} alt={props.alt} />;
     },
-    table: ({ node, ...props }: any) => (
-      <div className="markdown-table-wrapper">
-        <table {...props} />
-      </div>
-    )
+    table: MarkdownTable
   };
 }
 
@@ -209,6 +307,14 @@ function App() {
 
   const chatEndRef = useRef<HTMLDivElement>(null);
   const chatContainerRef = useRef<HTMLDivElement>(null);
+  const [copiedId, setCopiedId] = useState<string | null>(null);
+
+  const copyToClipboard = (text: string, msgId: string) => {
+    navigator.clipboard.writeText(text).then(() => {
+      setCopiedId(msgId);
+      setTimeout(() => setCopiedId(null), 2000);
+    });
+  };
   const [userHasScrolledUp, setUserHasScrolledUp] = useState(false);
   const apiHost = import.meta.env.VITE_API_HOST || 'http://localhost:9000';
 
@@ -534,9 +640,20 @@ function App() {
                       </div>
                     )}
                   </div>
-                  <span className="msg-time">
-                    {msg.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                  </span>
+                  <div className="msg-meta-row">
+                    <span className="msg-time">
+                      {msg.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                    </span>
+                    {msg.type === 'assistant' && (
+                      <button 
+                        className="btn-copy-msg"
+                        onClick={() => copyToClipboard(msg.content, msg.id)}
+                        title="Copy to clipboard"
+                      >
+                        {copiedId === msg.id ? <Check size={14} /> : <Copy size={14} />}
+                      </button>
+                    )}
+                  </div>
                 </div>
               </motion.div>
             ))}

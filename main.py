@@ -8,7 +8,7 @@ from langchain_core.messages import HumanMessage, AIMessage
 from deepagents.backends.filesystem import FilesystemBackend
 
 from agents import attendance_agent, dashboard_agent, output_formatter_agent
-from langchain_openai import ChatOpenAI
+from utils.model_utils import get_chat_model
 
 load_dotenv()
 backend = FilesystemBackend(root_dir=".", virtual_mode=False)
@@ -45,7 +45,7 @@ subagents = [
 
 
 agent = create_deep_agent(
-    model=ChatOpenAI(model=primary_model_name, max_retries=5),
+    model=get_chat_model(model_name=primary_model_name),
     subagents=subagents,
     system_prompt=MANAGER_SYSTEM_PROMPT,
     backend=backend,

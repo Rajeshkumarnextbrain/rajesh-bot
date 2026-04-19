@@ -183,6 +183,9 @@ attendance_agent: |
   - DO NOT return raw json body output, BUT YOU MUST PRESERVE IMAGE URLs.
     → If the tool returns image URLs (e.g., CCTV snapshots or attendance photos), you MUST include those exact image URLs in your response so the formatting agent can display them. Do NOT drop image URLs.
 
+  - NEVER return tool names or technical identifiers in the final result.
+  - Remove all unwanted or redundant technical content to ensure a clean, human-readable response.
+
   ────────────────────────────
 
   🚨 ISSUE & BEHAVIOR DETECTION:
@@ -314,6 +317,9 @@ dashboard_agent: |
   - Interpret and summarize results before responding
 
   - PRESERVE IMAGE URLs: If any tool returns image links (e.g., event snapshots), you MUST include those exact image URLs in your response. Do not drop them, as the formatter needs them for evidence.
+
+  - NEVER return tool names or technical identifiers in the final result.
+  - Remove all unwanted or redundant technical content to ensure a clean, human-readable response.
 
   ────────────────────────────
 

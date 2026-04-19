@@ -587,6 +587,37 @@ body {
   padding: 0 0.22rem;
 }
 
+.msg-meta-row {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  margin-top: 0.2rem;
+}
+
+.btn-copy-msg {
+  background: transparent;
+  border: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  padding: 0.35rem;
+  border-radius: 0.5rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all var(--tb);
+  opacity: 0.45;
+}
+
+.msg-row:hover .btn-copy-msg {
+  opacity: 1;
+}
+
+.btn-copy-msg:hover {
+  background: var(--acc-subtle);
+  color: var(--acc1);
+  transform: scale(1.1);
+}
+
 /* ── Thinking indicator (Inside bubble) ── */
 .thinking-steps-inner {
   display: flex;
@@ -801,12 +832,51 @@ body {
 }
 
 /* ── Markdown Table Styles ── */
+.markdown-table-wrapper-container {
+  margin: 1.25rem 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.table-actions-top {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.btn-export-csv {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.35rem 0.75rem;
+  background: var(--bg-surface);
+  border: 1px solid var(--border-strong);
+  color: var(--acc1);
+  border-radius: 0.5rem;
+  font-size: 0.68rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all var(--tf);
+  box-shadow: var(--s1);
+}
+
+.btn-export-csv:hover {
+  background: var(--acc-grad);
+  color: #fff;
+  border-color: transparent;
+  box-shadow: var(--sa);
+  transform: translateY(-1px);
+}
+
+.btn-export-csv:active {
+  transform: translateY(0);
+}
+
 .markdown-table-wrapper {
   width: 100%;
-  max-height: 320px; /* Shows approx 5 rows + header */
+  max-height: 450px; /* Shows more rows */
   overflow-y: auto;
   overflow-x: auto;
-  margin: 0.85rem 0;
   border-radius: 0.85rem;
   border: 1px solid var(--border-strong);
   box-shadow: var(--s2);
