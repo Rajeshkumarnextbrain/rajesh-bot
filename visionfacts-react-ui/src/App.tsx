@@ -17,6 +17,7 @@ import {
   Sun,
   Moon,
   ChevronDown,
+  Search,
 } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
@@ -192,7 +193,7 @@ function App() {
   const [input, setInput] = useState('');
   const [isTyping, setIsTyping] = useState(false);
   const [isAnimatingText, setIsAnimatingText] = useState(false);
-  const [activeProgress, setActiveProgress] = useState<{ status?: string; task?: string; tool?: string } | null>(null);
+  const [activeProgress, setActiveProgress] = useState<{ type: string; content: string } | null>(null);
   const [typingText, setTypingText] = useState('');
   const [previewImage, setPreviewImage] = useState<string | null>(null);
   const [darkMode, setDarkMode] = useState(true); // default to dark
@@ -276,7 +277,7 @@ function App() {
     setMessages((prev) => [...prev, userMsg]);
     setInput('');
     setIsTyping(true);
-    setActiveProgress({ status: '🤖 Initializing...' });
+    setActiveProgress({ type: 'status', content: '🤖 Initializing...' });
 
     if (abortControllerRef.current) {
       abortControllerRef.current.abort();
@@ -312,12 +313,8 @@ function App() {
             const jsonStr = part.startsWith('data: ') ? part.substring(6).trim() : part;
             const data: UpdateChunk = JSON.parse(jsonStr);
 
-            if (data.type === 'status') {
-              setActiveProgress(prev => ({ ...(prev || {}), status: data.content }));
-            } else if (data.type === 'task') {
-              setActiveProgress(prev => ({ ...(prev || {}), task: data.content }));
-            } else if (data.type === 'tool') {
-              setActiveProgress(prev => ({ ...(prev || {}), tool: data.content }));
+            if (data.type === 'status' || data.type === 'task' || data.type === 'tool') {
+              setActiveProgress({ type: data.type, content: data.content });
             } else if (data.type === 'answer') {
               setIsAnimatingText(true);
               let currentIdx = 0;
@@ -340,7 +337,7 @@ function App() {
                   setActiveProgress(null);
                   setIsTyping(false);
                 }
-              }, 12);
+              }, 3);
             }
           } catch (err) {
             console.error('Failed to parse chunk:', err, part);
@@ -576,80 +573,29 @@ function App() {
                 <div className="msg-avatar bot-avatar">
                   <Bot size={14} />
                 </div>
-                <div className="msg-content" style={{ width: '100%', maxWidth: '18rem' }}>
-                  {!isAnimatingText && (
-                    <div className="msg-bubble bot-bubble" style={{ padding: '1rem 1.2rem', width: '100%', minWidth: '16rem' }}>
-                      <div style={{ display: 'flex', flexDirection: 'column', gap: '0.65rem' }}>
-                        {/* Always show skeleton while thinking */}
-                        <div className="premium-skeleton" style={{ height: '0.55rem', borderRadius: '4px', width: '92%' }} />
-                        <div className="premium-skeleton" style={{ height: '0.55rem', borderRadius: '4px', width: '100%' }} />
-                        <div className="premium-skeleton" style={{ height: '0.55rem', borderRadius: '4px', width: '60%' }} />
-                      </div>
-                    </div>
-                  )}
-
-                  {/* Render active progress steps BELOW the bubble area */}
-                  {activeProgress && (
-                    <div className="thinking-steps-outer" style={{ marginTop: isAnimatingText ? '0rem' : '0.75rem', paddingLeft: '0.5rem', display: 'flex', flexDirection: 'column', gap: '0.55rem' }}>
-                      <AnimatePresence mode="popLayout">
-                        {activeProgress.status && (
-                          <motion.div 
-                            key="status"
-                            initial={{ opacity: 0, x: -8 }} 
-                            animate={{ opacity: 1, x: 0 }}
-                            className="thinking-step-mini status"
-                          >
-                            <Activity size={13} className="step-icon pulse" />
-                            <span>{activeProgress.status}</span>
-                          </motion.div>
-                        )}
-                        {activeProgress.task && (
-                          <motion.div 
-                            key="task"
-                            initial={{ opacity: 0, x: -8 }} 
-                            animate={{ opacity: 1, x: 0 }}
-                            className="thinking-step-mini task"
-                          >
-                            <Info size={13} className="step-icon" />
-                            <span style={{ fontSize: '0.65rem', opacity: 0.8 }}>{activeProgress.task}</span>
-                          </motion.div>
-                        )}
-                        {activeProgress.tool && (
-                          <motion.div 
-                            key="tool"
-                            initial={{ opacity: 0, x: -8 }} 
-                            animate={{ opacity: 1, x: 0 }}
-                            className="thinking-step-mini tool"
-                          >
-                            <Cpu size={13} className="step-icon spin-slow" />
-                            <span>{activeProgress.tool}</span>
-                          </motion.div>
-                        )}
-                      </AnimatePresence>
-                    </div>
-                  )}
-                </div>
-              </motion.div>
-            )}
-
-            {/* Thinking / progress indicator wrapper fallback */}
-            {isTyping && !isAnimatingText && !activeProgress && (
-              <motion.div
-                initial={{ opacity: 0, y: 8 }}
-                animate={{ opacity: 1, y: 0 }}
-                className="msg-row bot"
-              >
-                <div className="msg-avatar bot-avatar">
-                  <Bot size={14} />
-                </div>
-                <div className="msg-content" style={{ width: '100%', maxWidth: '18rem' }}>
-                  <div className="msg-bubble bot-bubble" style={{ padding: '1rem 1.2rem', width: '100%', minWidth: '16rem' }}>
+                <div className="msg-content" style={{ width: '100%', maxWidth: '32rem' }}>
+                  {/* Bot bubble with Skeleton animation */}
+                  <div className="msg-bubble bot-bubble" style={{ padding: '1rem 1.25rem', width: '100%' }}>
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '0.65rem' }}>
-                      <div className="premium-skeleton" style={{ height: '0.55rem', borderRadius: '4px', width: '92%' }} />
-                      <div className="premium-skeleton" style={{ height: '0.55rem', borderRadius: '4px', width: '100%' }} />
-                      <div className="premium-skeleton" style={{ height: '0.55rem', borderRadius: '4px', width: '60%' }} />
+                      <div className="premium-skeleton" style={{ height: '0.5rem', borderRadius: '4px', width: '90%' }} />
+                      <div className="premium-skeleton" style={{ height: '0.5rem', borderRadius: '4px', width: '100%' }} />
+                      <div className="premium-skeleton" style={{ height: '0.5rem', borderRadius: '4px', width: '65%' }} />
                     </div>
                   </div>
+
+                  {/* Progress update card shown below the bubble */}
+                  {activeProgress && (
+                    <motion.div
+                      key={activeProgress.type + activeProgress.content}
+                      initial={{ opacity: 0, y: 8 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      className={`progress-card ${activeProgress.type}`}
+                      style={{ marginTop: '0.75rem' }}
+                    >
+                      {activeProgress.type === 'status' && <Loader2 size={13} className="animate-spin" />}
+                      <span>{activeProgress.content}</span>
+                    </motion.div>
+                  )}
                 </div>
               </motion.div>
             )}
