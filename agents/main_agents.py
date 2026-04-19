@@ -18,16 +18,28 @@ async def initize_mcp():
     mcp_client = MultiServerMCPClient(
         {
             'attendance':{
-                "transport": "sse",
-                "url": os.getenv("ATTENDANCE_MCP_URL", "http://localhost:8000/sse"),
+                "transport": "streamable_http",
+                "url": os.getenv("ATTENDANCE_MCP_URL", "http://localhost:8000/mcp"),
                 "timeout": 120.0,
             }
         }
     )
 
-    tools = await mcp_client.get_tools()
+    # Retry logic for Docker service startup
+    for attempt in range(6): # 6 attempts = ~15 seconds
+        try:
+            print(f"Attempting to connect to MCP server... (Attempt {attempt+1}/6)")
+            tools = await mcp_client.get_tools()
+            print("Successfully connected to MCP server.")
+            return tools
+        except Exception as e:
+            if attempt == 5:
+                print(f"Failed to connect to MCP server after several attempts: {e}")
+                raise e
+            print(f"MCP connection failed, retrying in 3s... ({e})")
+            await asyncio.sleep(3)
 
-    return tools
+    return []
 
 all_tools = asyncio.run(initize_mcp())
 

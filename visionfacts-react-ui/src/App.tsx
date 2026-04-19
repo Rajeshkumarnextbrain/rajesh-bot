@@ -7,7 +7,6 @@ import {
   Settings,
   Trash2,
   Loader2,
-  Cpu,
   Activity,
   Info,
   ChevronRight,
@@ -17,7 +16,6 @@ import {
   Sun,
   Moon,
   ChevronDown,
-  Search,
   Copy,
   Check,
   Download,
@@ -156,7 +154,7 @@ function isImageUrl(href?: string): boolean {
 
 /* ── Markdown component map ── */
 function makeMarkdownComponents(onImageClick: (src: string) => void) {
-  const ImagePreview = ({ src, alt }: { src: string; alt?: string }) => (
+  const ImagePreview = ({ src }: { src: string; alt?: string }) => (
     <div className="cctv-preview-container">
       <CCTVImage src={src} onOpen={onImageClick} />
       <div className="cctv-img-footer">
@@ -274,12 +272,12 @@ function makeMarkdownComponents(onImageClick: (src: string) => void) {
   return {
     a: ({ node, ...props }: any) => {
       if (isImageUrl(props.href)) {
-        return <ImagePreview src={props.href} alt={props.children} />;
+        return <ImagePreview src={props.href} />;
       }
       return <a {...props} target="_blank" rel="noreferrer" />;
     },
     img: ({ node, ...props }: any) => {
-      return <ImagePreview src={props.src} alt={props.alt} />;
+      return <ImagePreview src={props.src} />;
     },
     table: MarkdownTable
   };

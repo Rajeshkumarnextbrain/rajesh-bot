@@ -4,7 +4,7 @@ langchain-community
 langgraph
 python-dotenv
 langchain-openai
-mcp
+fastmcp
 langchain-mcp-adapters
 python-dateutil
 dateparser
@@ -13,6 +13,5 @@ uvicorn
 streamlit
 deepagents
 pyyaml
-toons
 redis
 pytz

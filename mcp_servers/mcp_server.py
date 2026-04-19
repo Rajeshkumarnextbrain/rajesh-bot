@@ -7,9 +7,9 @@ from datetime import datetime
 import pytz
 from dotenv import load_dotenv
 
-from mcp.server.fastmcp import FastMCP
+from fastmcp import FastMCP
 import dateparser
-import toons
+# toons removed — fastmcp requires dict returns, not strings
 import redis
 
 load_dotenv()
@@ -49,7 +49,7 @@ def normalize_to_utc(date_str: str) -> str:
 
 # Create the MCP server instance
 port = int(os.getenv("MCP_PORT", "8000"))
-mcp = FastMCP("Analytical Tools",port=port)
+mcp = FastMCP("Analytical Tools")
 
 # Initialize the shared session automatically with credentials from environment
 try:
@@ -94,9 +94,26 @@ def generate_cache_key(tool_name, kwargs):
 
 def get_cached_data(key: str):
     try:
-        return redis_client.get(key)
+        data = redis_client.get(key)
+        if data is not None:
+            return json.loads(data)
+        return None
     except Exception:
         return None
+
+def set_cached_data(key: str, data, ex: int = 500):
+    try:
+        redis_client.set(key, json.dumps(data), ex=ex)
+    except Exception:
+        pass
+
+def ensure_dict(result):
+    """Wrap non-dict results in a dict. FastMCP requires tools to return dicts."""
+    if isinstance(result, dict):
+        return result
+    if isinstance(result, list):
+        return {"data": result}
+    return {"data": result}
 
 
 @mcp.tool()
@@ -118,16 +135,11 @@ def get_event_counts(range_type: str = "today") -> dict:
     # 1️⃣ Check cache
     cached = get_cached_data(key)
     if cached is not None:
-        return cached
+        return ensure_dict(cached)
     
-    result = toons.dumps(api_functions.get_event_counts(range_type))
-
-    try:
-        redis_client.set(key, result, ex=500)
-    except Exception:
-        pass
-
-    return result
+    result = api_functions.get_event_counts(range_type)
+    set_cached_data(key, result, ex=500)
+    return ensure_dict(result)
 
 @mcp.tool()
 def get_vehicle_counts(range_type: str = "today") -> dict:
@@ -146,16 +158,11 @@ def get_vehicle_counts(range_type: str = "today") -> dict:
     # 1️⃣ Check cache
     cached = get_cached_data(key)
     if cached is not None:
-        return cached
+        return ensure_dict(cached)
     
-    result = toons.dumps(api_functions.get_vehicle_counts(range_type))
-
-    try:
-        redis_client.set(key, result, ex=500)
-    except Exception:
-        pass
-
-    return result
+    result = api_functions.get_vehicle_counts(range_type)
+    set_cached_data(key, result, ex=500)
+    return ensure_dict(result)
 
 @mcp.tool()
 def get_crowd_counts(range_type: str = "today") -> dict:
@@ -174,16 +181,11 @@ def get_crowd_counts(range_type: str = "today") -> dict:
     # 1️⃣ Check cache
     cached = get_cached_data(key)
     if cached is not None:
-        return cached
+        return ensure_dict(cached)
     
-    result = toons.dumps(api_functions.get_crowd_counts(range_type))
-
-    try:
-        redis_client.set(key, result, ex=500)
-    except Exception:
-        pass
-
-    return result
+    result = api_functions.get_crowd_counts(range_type)
+    set_cached_data(key, result, ex=500)
+    return ensure_dict(result)
 
 @mcp.tool()
 def get_line_crossing_counts(range_type: str = "today") -> dict:
@@ -202,16 +204,11 @@ def get_line_crossing_counts(range_type: str = "today") -> dict:
     # 1️⃣ Check cache
     cached = get_cached_data(key)
     if cached is not None:
-        return cached
+        return ensure_dict(cached)
     
-    result = toons.dumps(api_functions.get_line_crossing_counts(range_type))
-
-    try:
-        redis_client.set(key, result, ex=500)
-    except Exception:
-        pass
-
-    return result
+    result = api_functions.get_line_crossing_counts(range_type)
+    set_cached_data(key, result, ex=500)
+    return ensure_dict(result)
 
 @mcp.tool()
 def get_vehicle_line_crossing_counts(range_type: str = "today") -> dict:
@@ -231,16 +228,11 @@ def get_vehicle_line_crossing_counts(range_type: str = "today") -> dict:
     # 1️⃣ Check cache
     cached = get_cached_data(key)
     if cached is not None:
-        return cached
+        return ensure_dict(cached)
     
-    result = toons.dumps(api_functions.get_vehicle_line_crossing_counts(range_type))
-
-    try:
-        redis_client.set(key, result, ex=500)
-    except Exception:
-        pass
-
-    return result
+    result = api_functions.get_vehicle_line_crossing_counts(range_type)
+    set_cached_data(key, result, ex=500)
+    return ensure_dict(result)
 
 @mcp.tool()
 def get_current_time() -> dict:
@@ -255,11 +247,11 @@ def get_current_time() -> dict:
     now_ist = datetime.now(ist)
     now_utc = datetime.now(pytz.UTC)
     
-    return toons.dumps({
+    return {
         "local_time": now_ist.strftime('%Y-%m-%d %H:%M:%S %Z%z'),
         "utc_time": now_utc.strftime('%Y-%m-%dT%H:%M:%SZ'),
         "timezone": "Asia/Kolkata"
-    })
+    }
 
 @mcp.tool()
 def get_event_types(limit: int = 20, offset: int = 0) -> dict:
@@ -276,16 +268,11 @@ def get_event_types(limit: int = 20, offset: int = 0) -> dict:
     # 1️⃣ Check cache
     cached = get_cached_data(key)
     if cached is not None:
-        return cached
+        return ensure_dict(cached)
     
-    result = toons.dumps(api_functions.get_event_types(limit, offset))
-
-    try:
-        redis_client.set(key, result, ex=2400)
-    except Exception:
-        pass
-
-    return result
+    result = api_functions.get_event_types(limit, offset)
+    set_cached_data(key, result, ex=2400)
+    return ensure_dict(result)
 
 
 def convert_utc_to_ist_readable(utc_str: str) -> str:
@@ -374,9 +361,9 @@ def get_attendances_advanced(
     # 1️⃣ Check cache
     cached = get_cached_data(key)
     if cached is not None:
-        return cached
+        return ensure_dict(cached)
 
-    result = toons.dumps(api_functions.get_attendances_advanced(
+    result = api_functions.get_attendances_advanced(
         limit=limit,
         offset=offset,
         search=search or None,
@@ -385,12 +372,9 @@ def get_attendances_advanced(
         start_date=start_date,
         end_date=end_date or None,
         staff_type=staff_type or None
-    ))
-    try:
-        redis_client.set(key, result, ex=500)
-    except Exception:
-        pass
-    return result
+    )
+    set_cached_data(key, result, ex=500)
+    return ensure_dict(result)
 
 @mcp.tool()
 def get_attendance_logs(attendance_record_id: int) -> dict:
@@ -415,7 +399,7 @@ def get_attendance_logs(attendance_record_id: int) -> dict:
     # 1️⃣ Check cache
     cached = get_cached_data(key)
     if cached is not None:
-        return cached
+        return ensure_dict(cached)
 
     data = api_functions.get_attendance_logs(attendance_record_id)
 
@@ -456,13 +440,8 @@ def get_attendance_logs(attendance_record_id: int) -> dict:
             "last_name": data["userData"].get("last_name"),
         }
 
-    result = toons.dumps(data)
-    try:
-        redis_client.set(key, result, ex=500)
-    except Exception:
-        pass
-
-    return result
+    set_cached_data(key, data, ex=500)
+    return ensure_dict(data)
 
 
 @mcp.tool()
@@ -493,15 +472,11 @@ def get_staffs(limit: int = 10, offset: int = 0, search: Optional[str] = None) -
     # 1️⃣ Check cache
     cached = get_cached_data(key)
     if cached is not None:
-        return cached
+        return ensure_dict(cached)
 
-    result = toons.dumps(api_functions.get_staffs(limit, offset, search if search else None))
-    try:
-        redis_client.set(key, result, ex=600)
-    except Exception:
-        pass
-
-    return result
+    result = api_functions.get_staffs(limit, offset, search if search else None)
+    set_cached_data(key, result, ex=600)
+    return ensure_dict(result)
 
 
 @mcp.tool()
@@ -530,15 +505,11 @@ def get_camera_list(limit: int = 10, offset: int = 0, search: Optional[str] = No
     # 1️⃣ Check cache
     cached = get_cached_data(key)
     if cached is not None:
-        return cached
+        return ensure_dict(cached)
 
-    result = toons.dumps(api_functions.get_devices(limit, offset, search))
-    try:
-        redis_client.set(key, result, ex=600)
-    except Exception:
-        pass
-
-    return result
+    result = api_functions.get_devices(limit, offset, search)
+    set_cached_data(key, result, ex=600)
+    return ensure_dict(result)
 
 @mcp.tool()
 def get_detailed_events(
@@ -582,9 +553,9 @@ def get_detailed_events(
     # 1️⃣ Check cache
     cached = get_cached_data(key)
     if cached is not None:
-        return cached
+        return ensure_dict(cached)
 
-    result = toons.dumps(api_functions.get_detailed_events(
+    result = api_functions.get_detailed_events(
         start_date=start_date,
         end_date=end_date,
         limit=limit,
@@ -592,14 +563,9 @@ def get_detailed_events(
         event_type=event_type,
         spot_name=spot_name,
         status=status
-    ))
-
-    try:
-        redis_client.set(key, result, ex=500)
-    except Exception:
-        pass
-
-    return result
+    )
+    set_cached_data(key, result, ex=500)
+    return ensure_dict(result)
 
 if __name__ == "__main__":
     import os
@@ -609,8 +575,8 @@ if __name__ == "__main__":
    
     
     if transport == "sse":
-        print(f"Starting MCP SSE server on port {port}...")
-        mcp.run(transport="sse")
+        print(f"Starting MCP server on 0.0.0.0:{port}...")
+        mcp.run(transport="http", host="0.0.0.0", port=port)
     elif transport in ("http", "streamable-http"):
         print(f"Starting MCP Streamable HTTP server on port {port}...")
         mcp.run(transport="streamable-http")

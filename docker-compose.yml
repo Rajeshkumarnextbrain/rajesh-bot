@@ -9,9 +9,55 @@ services:
       - redis_data:/data
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
-      interval: 10s
+      interval: 5s
       timeout: 5s
       retries: 5
+
+  mcp-server:
+    build:
+      context: .
+      dockerfile: Dockerfile.backend
+    container_name: mcp-server
+    restart: unless-stopped
+    command: python mcp_servers/mcp_server.py
+    env_file: .env
+    environment:
+      - REDIS_HOST=redis
+      - MCP_TRANSPORT=sse
+      - MCP_PORT=8000
+    ports:
+      - "8000:8000"
+    depends_on:
+      redis:
+        condition: service_healthy
+
+  api-server:
+    build:
+      context: .
+      dockerfile: Dockerfile.backend
+    container_name: api-server
+    restart: unless-stopped
+    command: python api_server.py
+    env_file: .env
+    environment:
+      - ATTENDANCE_MCP_URL=http://mcp-server:8000/mcp
+      - API_PORT=9000
+    ports:
+      - "9000:9000"
+    depends_on:
+      - mcp-server
+
+  frontend:
+    build:
+      context: ./visionfacts-react-ui
+      args:
+        - VITE_API_HOST=http://localhost:9000
+    container_name: visionfacts-ui
+    restart: unless-stopped
+    ports:
+      - "3000:80" # Map to 3000 to avoid conflict with local 80
+    depends_on:
+      - api-server
 
 volumes:
   redis_data:
