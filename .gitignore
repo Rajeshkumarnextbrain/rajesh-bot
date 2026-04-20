@@ -40,3 +40,5 @@ tmp/
 tmp.py
 tmp_line_nums.py
 test.py
+
+deployment.env
