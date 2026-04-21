@@ -19,6 +19,7 @@ import {
   Copy,
   Check,
   Download,
+  Menu,
 } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
@@ -293,6 +294,7 @@ function App() {
   const [typingText, setTypingText] = useState('');
   const [previewImage, setPreviewImage] = useState<string | null>(null);
   const [darkMode, setDarkMode] = useState(true); // default to dark
+  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const abortControllerRef = useRef<AbortController | null>(null);
 
   const [sessionId, setSessionId] = useState<string>(() => {
@@ -364,6 +366,7 @@ function App() {
     const newId = `sess_${Math.random().toString(36).substr(2, 9)}`;
     setSessionId(newId);
     localStorage.setItem('vf_session_id', newId);
+    setIsSidebarOpen(false); // Close sidebar on mobile after starting new chat
   };
 
   /* ── Submit / streaming ── */
@@ -381,6 +384,7 @@ function App() {
     setMessages((prev) => [...prev, userMsg]);
     setInput('');
     setIsTyping(true);
+    setIsSidebarOpen(false); // Close sidebar on mobile when query starts
     setActiveProgress({ type: 'status', content: '🤖 Initializing...' });
 
     if (abortControllerRef.current) {
@@ -495,10 +499,23 @@ function App() {
 
   /* ── Render ── */
   return (
-    <div className={`app-root${darkMode ? ' dark' : ''}`}>
+    <div className={`app-root${darkMode ? ' dark' : ''}${isSidebarOpen ? ' sidebar-open' : ''}`}>
+      
+      {/* ── MOBILE OVERLAY ── */}
+      <AnimatePresence>
+        {isSidebarOpen && (
+          <motion.div 
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            onClick={() => setIsSidebarOpen(false)}
+            className="mobile-sidebar-overlay"
+          />
+        )}
+      </AnimatePresence>
 
       {/* ═══ SIDEBAR ═══ */}
-      <aside className="app-sidebar">
+      <aside className={`app-sidebar ${isSidebarOpen ? 'open' : ''}`}>
 
         {/* Brand */}
         <div className="app-sidebar-brand">
@@ -557,7 +574,14 @@ function App() {
 
         {/* Header */}
         <header className="app-header">
-          <div className="header-agent-info">
+          <div className="header-left">
+            <button 
+              className="icon-btn mobile-menu-btn" 
+              onClick={() => setIsSidebarOpen(!isSidebarOpen)}
+            >
+              {isSidebarOpen ? <X size={18} /> : <Menu size={18} />}
+            </button>
+            <div className="header-agent-info">
             <div className="agent-avatar">
               <Bot size={15} />
             </div>
@@ -569,6 +593,7 @@ function App() {
               </div>
             </div>
           </div>
+        </div>
 
           <div className="header-actions">
             {/* Theme Toggle */}

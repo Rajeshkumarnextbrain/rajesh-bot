@@ -42,6 +42,7 @@ services:
     environment:
       - ATTENDANCE_MCP_URL=http://mcp-server:8003/mcp
       - API_PORT=9000
+      - API_HOST=${API_HOST:-0.0.0.0}
     ports:
       - "9000:9000"
     depends_on:
@@ -51,7 +52,7 @@ services:
     build:
       context: ./visionfacts-react-ui
       args:
-        - VITE_API_HOST=http://localhost:9000
+        - API_HOST=${API_HOST:-0.0.0.0}
     container_name: visionfacts-ui
     restart: unless-stopped
     ports:
