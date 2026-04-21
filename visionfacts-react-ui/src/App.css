@@ -5,7 +5,7 @@
 
 /* ── Global Reset ── */
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-html, body, #root { height: 100%; }
+html, body, #root { height: 100%; overflow: hidden; position: fixed; width: 100%; }
 body {
   font-family: 'Inter', system-ui, -apple-system, sans-serif;
   -webkit-font-smoothing: antialiased;
@@ -129,6 +129,7 @@ body {
   background: var(--bg-main);
   color: var(--text-primary);
   height: 100vh;
+  height: 100dvh;
   width: 100%;
   overflow: hidden;
   display: flex;
@@ -706,7 +707,7 @@ body {
 
 /* ── Input Area ── */
 .chat-input-area {
-  padding: 1rem 2rem 1.4rem;
+  padding: 1rem 2rem calc(1.4rem + env(safe-area-inset-bottom, 0));
   background: linear-gradient(to top, var(--bg-main) 72%, transparent);
   position: relative;
   z-index: 10;
@@ -1474,8 +1475,8 @@ body {
   }
 
   .app-header {
-    padding: 0 0.85rem;
-    height: 3.8rem;
+    padding: env(safe-area-inset-top, 0.5rem) 0.85rem 0;
+    height: calc(3.8rem + env(safe-area-inset-top, 0.5rem));
   }
 
   .header-agent-info {
@@ -1517,7 +1518,7 @@ body {
   }
 
   .chat-input-area {
-    padding: 0.75rem 0.85rem 1.2rem;
+    padding: 0.75rem 0.85rem calc(0.75rem + env(safe-area-inset-bottom, 0px));
   }
 
   .chat-input-form {

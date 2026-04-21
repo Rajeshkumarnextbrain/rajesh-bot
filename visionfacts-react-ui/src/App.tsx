@@ -316,7 +316,16 @@ function App() {
     });
   };
   const [userHasScrolledUp, setUserHasScrolledUp] = useState(false);
-  const apiHost = import.meta.env.VITE_API_HOST || 'http://localhost:9000';
+  const apiHost = useMemo(() => {
+    if (import.meta.env.VITE_API_HOST) return import.meta.env.VITE_API_HOST;
+    // Fallback to current host with port 9000
+    const { protocol, hostname } = window.location;
+    return `${protocol}//${hostname}:9000`;
+  }, []);
+
+  useEffect(() => {
+    console.log('🚀 VisionFacts API Host:', apiHost);
+  }, [apiHost]);
 
   /* ── Persist theme preference ── */
   useEffect(() => {
